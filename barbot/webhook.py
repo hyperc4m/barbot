@@ -2,13 +2,13 @@ import difflib
 import json
 import re
 import sys
+import traceback
 import uuid
 from typing import Dict, Any, Optional
 
 import telegram
 
-from . import database, app
-
+from . import database, app, util
 
 bot = telegram.Bot(
     token=app.TELEGRAM_BOT_TOKEN
@@ -43,9 +43,6 @@ async def handle_webhook_async(body: Dict[str, Any]) -> Optional[Dict[str, Any]]
     if update.inline_query is not None:
         return await handle_inline_query(update, update.inline_query)
 
-    if update.chosen_inline_result is not None:
-        await handle_chosen_inline_result(update, update.chosen_inline_result)
-
     if update.message is not None:
         await handle_message(update, update.message)
 
@@ -61,9 +58,6 @@ async def handle_inline_query(udpate: telegram.Update, query: telegram.InlineQue
         possibilities = [x.venue for x in current_suggestions]
         suggestions_by_name = {s.venue: s for s in current_suggestions}
         matches = difflib.get_close_matches(query_text, possibilities, n=5, cutoff=0.1)
-
-        # if query_text not in matches:
-        #     matches.insert(0, query_text)
 
         def make_result(hex_uuid: str, match_name: str) -> Dict[str, Any]:
             return {
@@ -93,7 +87,16 @@ async def handle_inline_query(udpate: telegram.Update, query: telegram.InlineQue
 async def add_suggestion(venue: str, user_id: int, username: str) -> None:
     venue = re.sub(r'\s+', ' ', venue).strip().lower().capitalize()
     venue = re.sub(r'\s\S', lambda m: m.group(0).title(), venue)
-    venue = venue[:256]
+
+    if len(venue) < app.MIN_VENUE_LENGTH:
+        return
+    if len(venue) > app.MAX_VENUE_LENGTH:
+        await bot.send_message(
+            app.MAIN_CHAT_ID,
+            f'Sorry @{username}, venue suggestions must be between {app.MIN_VENUE_LENGTH} and {app.MAX_VENUE_LENGTH} '
+            f'characters long.'
+        )
+        return
 
     suggestions = database.get_current_suggestions(bypass_cache=True)
 
@@ -114,42 +117,30 @@ async def add_suggestion(venue: str, user_id: int, username: str) -> None:
                  f'which was already suggested by {found_suggestion.user_handle}'
         )
     else:
-        venue_uuid = uuid.uuid4().hex
-        database.add_suggestion(venue_uuid, venue, user_id, username)
-        # Send message to the main chat to let people know that a suggestion was added.
-        await bot.send_message(
-            chat_id=app.MAIN_CHAT_ID,
-            text=f'@{username} has successfully suggested "{venue}" for {app.BARNIGHT_HASHTAG}'
-        )
 
+        if len(suggestions) >= app.MAX_SUGGESTIONS:
+            await bot.send_message(
+                chat_id=app.MAIN_CHAT_ID,
+                text=f'Sorry, I could not add @{username}\'s suggestion for "{venue}" since we have hit the max number '
+                     f'of suggestions for the next poll ({app.MAX_SUGGESTIONS}).'
+            )
+        else:
+            venue_uuid = uuid.uuid4().hex
+            try:
+                database.add_suggestion(venue_uuid, venue, user_id, username)
+            except:
+                traceback.print_exc()
+                await bot.send_message(
+                    app.MAIN_CHAT_ID,
+                    f'Sorry @{username}, I was unable to add your suggestion for "{venue}". Please try again.'
+                )
+                return
 
-async def handle_chosen_inline_result(update: telegram.Update, result: telegram.ChosenInlineResult):
-    if not await database.is_user_part_of_main_chat(bot, result.from_user.id):
-        return
-
-    venue: str
-    if result.result_id == 'null':
-        venue = result.query
-    else:
-        venue = database.get_suggestion_by_uuid(result.result_id).venue
-
-    await add_suggestion(venue, result.from_user.id, result.from_user.username)
-    #
-    #
-    #     venue_uuid = uuid.uuid4().hex
-    #     database.add_suggestion(venue_uuid, venue, result.from_user.id, result.from_user.username)
-    #     # Send message to the main chat to let people know that a suggestion was added.
-    #     await update.get_bot().send_message(
-    #         chat_id=app.MAIN_CHAT_ID,
-    #         text=f'@{result.from_user.username} has successfully suggested "{venue}" for #barnight'
-    #     )
-    # else:
-    #
-    #     await update.get_bot().send_message(
-    #         chat_id=app.MAIN_CHAT_ID,
-    #         text=f'@{result.from_user.username} has suggested "{suggestion.venue}" for #barnight, '
-    #              f'which was already suggested by {suggestion.user_handle}'
-    #     )
+            # Send message to the main chat to let people know that a suggestion was added.
+            await bot.send_message(
+                chat_id=app.MAIN_CHAT_ID,
+                text=f'@{username} has successfully suggested "{venue}" for {app.BARNIGHT_HASHTAG}'
+            )
 
 
 async def handle_message(update: telegram.Update, message: telegram.Message):
@@ -161,7 +152,7 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
     if not message.text:
         return
 
-    is_admin = await database.get_user_status_in_main_chat(bot, message.from_user.id)
+    is_admin = await database.is_user_admin_of_main_chat(bot, message.from_user.id)
 
     message_lower = message.text.lower()
 
@@ -172,18 +163,18 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
                     f'You can also use @{app.BOT_USERNAME} in your message to suggest a venue.'
             await bot.send_message(message.chat.id, message_text)
 
-        if message_lower.startswith('/delete ') or message_lower == '/delete':
-            if is_admin:
-                venue_name = message.text[len('/delete '):].strip()
-                if not venue_name:
-                    await bot.send_message(
-                        message.chat.id,
-                        'Usage: /delete <venue_name>'
-                    )
-                else:
-                    suggestions = database.get_current_suggestions(bypass_cache=False)
-                    suggestion = next((s for s in suggestions if s.venue == venue_name), None)
-                    if suggestion:
+        elif message_lower.startswith('/delete ') or message_lower == '/delete':
+            venue_name = message.text[len('/delete '):].strip()
+            if not venue_name:
+                await bot.send_message(
+                    message.chat.id,
+                    'Usage: /delete <venue_name>'
+                )
+            else:
+                suggestions = database.get_current_suggestions(bypass_cache=False)
+                suggestion = next((s for s in suggestions if s.venue == venue_name), None)
+                if suggestion:
+                    if is_admin or message.from_user.id == suggestion.user_id:
                         try:
                             database.remove_suggestion(suggestion.uuid)
                         except:
@@ -191,33 +182,47 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
                                 message.chat.id,
                                 f'Was unable to remove suggestion "{venue_name}" :('
                             )
-                            raise
+                            traceback.print_exc()
+                            return
                         await bot.send_message(
                             message.chat.id,
                             f'Successfully removed "{venue_name}" from suggestions.'
                         )
+                        await bot.send_message(
+                            app.MAIN_CHAT_ID,
+                            f'@{message.from_user.username} has removed @{suggestion.user_handle}\'s suggestion for '
+                            f'"{suggestion.venue}"'
+                        )
                     else:
                         await bot.send_message(
                             message.chat.id,
-                            f'Could not find suggestion "{venue_name}" to remove.'
+                            'Sorry, you can only delete venues that you suggested. '
+                            '(Only admins can delete any suggestion)'
                         )
-            else:
-                await bot.send_message(
-                    message.chat.id,
-                    'Sorry, you must be an admin of the main chatroom to manage venue suggestions.'
-                )
+                else:
+                    await bot.send_message(
+                        message.chat.id,
+                        f'Could not find suggestion "{venue_name}" to remove.'
+                    )
 
-        if message_lower.startswith('/list') or message_lower == '/list':
-            if database.is_user_part_of_main_chat(bot, message.from_user.id):
+        elif message_lower.startswith('/list') or message_lower == '/list':
+            if await database.is_user_part_of_main_chat(bot, message.from_user.id):
                 suggestions = database.get_current_suggestions()
                 message_text = 'Current suggested venues:\n\n'
-                message_text += '\n'.join(f'{s.venue} (Suggested by @{s.user_handle})' for s in suggestions)
+                message_text += util.get_list_suggestions_message_text(suggestions)
                 await bot.send_message(message.chat.id, message_text)
             else:
                 await bot.send_message(
                     message.chat.id,
                     'You must be a member of the main chatroom to list suggestions.'
                 )
+
+        elif app.BARNIGHT_HASHTAG in message_lower:
+            await bot.send_message(
+                message.chat.id,
+                f'Please send venue suggestions in the main chatroom.',
+                reply_to_message_id=message.id,
+            )
 
     elif message.chat.id == app.MAIN_CHAT_ID:
         hashtag_index = message_lower.find(app.BARNIGHT_HASHTAG)

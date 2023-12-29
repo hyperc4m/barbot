@@ -102,6 +102,7 @@ def add_suggestion(hex_uuid: str, venue: str, user_id: int, user_handle: str):
         TableName=app.DYNAMO_WEEK_TABLE_NAME,
         Key={'id': {'S': 'current'}},
         UpdateExpression='SET venues.#uuid = :value',
+        ConditionExpression='size(venues) < :max_suggestions',
         ExpressionAttributeNames={
             '#uuid': hex_uuid
         },
@@ -110,7 +111,8 @@ def add_suggestion(hex_uuid: str, venue: str, user_id: int, user_handle: str):
                 'name': {'S': venue},
                 'user_id': {'N': str(user_id)},
                 'user_handle': {'S': user_handle}
-            }}
+            }},
+            ':max_suggestions': {'N': str(app.MAX_SUGGESTIONS)}
         }
     )
 
@@ -157,3 +159,8 @@ async def is_user_part_of_main_chat(bot: telegram.Bot, user_id: int) -> bool:
     status = await get_user_status_in_main_chat(bot, user_id)
     return status in (telegram.ChatMember.OWNER, telegram.ChatMember.ADMINISTRATOR,
                       telegram.ChatMember.MEMBER, telegram.ChatMember.RESTRICTED)
+
+
+async def is_user_admin_of_main_chat(bot: telegram.Bot, user_id: int) -> bool:
+    status = await get_user_status_in_main_chat(bot, user_id)
+    return status in (telegram.ChatMember.OWNER, telegram.ChatMember.ADMINISTRATOR)

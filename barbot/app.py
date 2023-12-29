@@ -11,4 +11,10 @@ WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
 
 BARNIGHT_HASHTAG = '#barnight'
 
+# This limit is imposed by the max number of poll options in a Telegram poll.\
+# Change this if Telegram's limit changes in the future.
+MAX_SUGGESTIONS = 10
+MIN_VENUE_LENGTH = 1
+MAX_VENUE_LENGTH = 100
+
 asyncio_loop = asyncio.get_event_loop()

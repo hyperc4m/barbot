@@ -1,14 +1,13 @@
 """
 Lambda functions intended to be called from Step Functions go here
 """
-import asyncio
 import random
+import traceback
 from typing import Dict, Any, List
 
 import telegram
 
-from . import app, database
-
+from . import app, database, util
 
 bot = telegram.Bot(
     token=app.TELEGRAM_BOT_TOKEN
@@ -46,14 +45,27 @@ async def handle_create_poll(event: Dict[str, Any]) -> Dict[str, Any]:
         )
         await bot.pin_chat_message(chat_id=app.MAIN_CHAT_ID, message_id=send_message_result.id)
     else:
-        send_poll_result = await bot.send_poll(
-            chat_id=app.MAIN_CHAT_ID,
-            question='Where are we going for barnight? (multiple choice)',
-            options=[x.venue for x in suggestions],
-            is_anonymous=False,
-            type='regular',
-            allows_multiple_answers=True
-        )
+        try:
+            send_poll_result = await bot.send_poll(
+                chat_id=app.MAIN_CHAT_ID,
+                question='Where are we going for barnight? (multiple choice)',
+                options=[x.venue for x in suggestions],
+                is_anonymous=False,
+                type='regular',
+                allows_multiple_answers=True
+            )
+        except:
+            traceback.print_exc()
+            error_message_result = await bot.send_message(
+                app.MAIN_CHAT_ID,
+                'Oh no! I was unable to create a poll for barnight! Please continue the process manually. '
+                'Here is the list of suggested venues:\n\n'
+                + util.get_list_suggestions_message_text(database.get_current_suggestions(bypass_cache=True))
+            )
+            database.clear_suggestions()
+            await bot.pin_chat_message(chat_id=app.MAIN_CHAT_ID, message_id=error_message_result.message_id)
+            return {}
+
         poll_id = send_poll_result.id
         database.set_current_poll_id(poll_id)
         await bot.pin_chat_message(chat_id=app.MAIN_CHAT_ID, message_id=poll_id)

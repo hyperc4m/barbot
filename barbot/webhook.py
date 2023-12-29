@@ -139,7 +139,7 @@ async def add_suggestion(venue: str, user_id: int, username: str) -> None:
             # Send message to the main chat to let people know that a suggestion was added.
             await bot.send_message(
                 chat_id=app.MAIN_CHAT_ID,
-                text=f'@{username} has successfully suggested "{venue}" for {app.BARNIGHT_HASHTAG}'
+                text=f'@{username} has successfully suggested "{venue}" for the next {app.BARNIGHT_HASHTAG} poll!'
             )
 
 
@@ -172,7 +172,7 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
                 )
             else:
                 suggestions = database.get_current_suggestions(bypass_cache=False)
-                suggestion = next((s for s in suggestions if s.venue == venue_name), None)
+                suggestion = next((s for s in suggestions if s.venue.lower() == venue_name.lower()), None)
                 if suggestion:
                     if is_admin or message.from_user.id == suggestion.user_id:
                         try:

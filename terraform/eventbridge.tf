@@ -24,7 +24,7 @@ locals {
 resource "aws_scheduler_schedule" "first_reminder" {
   for_each = local.schedules
 
-  name = "barnight_${each.key}"
+  name = "${var.prefix}_${each.key}"
   group_name = "default"
   schedule_expression = "cron(${each.value.cron})"
   schedule_expression_timezone = var.timezone

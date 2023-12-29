@@ -3,7 +3,7 @@ resource "aws_api_gateway_account" "account" {
 }
 
 resource "aws_iam_role" "api_gateway_cloudwatch_global" {
-  name = "barbot_api_gateway_cloudwatch_global"
+  name = "${var.prefix}_api_gateway_cloudwatch_global"
 
   assume_role_policy = <<EOF
 {
@@ -23,7 +23,7 @@ EOF
 }
 
 resource "aws_iam_role_policy" "cloudwatch" {
-  name = "default"
+  name = "${var.prefix}_manage_cloudwatch"
   role = aws_iam_role.api_gateway_cloudwatch_global.id
 
   policy = <<EOF
@@ -64,12 +64,12 @@ data aws_iam_policy_document "apigateway_lambda_invoker_assume_role" {
 }
 
 resource "aws_iam_role" "apigateway_lambda_invoker" {
-  name = "barbot_apigateway_lambda_invoker"
+  name = "${var.prefix}_apigateway_lambda_invoker"
   assume_role_policy = data.aws_iam_policy_document.apigateway_lambda_invoker_assume_role.json
 }
 
 resource "aws_iam_role_policy" "apigateway_lambda_invoker" {
-  name = "default"
+  name = "${var.prefix}_apigateway_lambda_invoker"
   role = aws_iam_role.apigateway_lambda_invoker.id
 
   policy = <<EOF
@@ -86,58 +86,17 @@ resource "aws_iam_role_policy" "apigateway_lambda_invoker" {
 EOF
 }
 
-
 resource "aws_apigatewayv2_api" "barbot" {
-  name = "barbot"
+  name = "${var.prefix}"
   protocol_type = "HTTP"
-
-
 }
-
-#
-# Deployment
-#
-
-#resource "aws_apigatewayv2_deployment" "barbot" {
-#  api_id = aws_apigatewayv2_api.barbot.id
-#
-#
-#  depends_on = [
-#    aws_apigatewayv2_authorizer.barbot,
-#    aws_apigatewayv2_route.webhook,
-#    aws_apigatewayv2_integration.webhook
-##    aws_api_gateway_resource.webhook,
-##    aws_api_gateway_method.webhook_post,
-##    aws_api_gateway_integration.webhook_post
-#  ]
-#
-##  triggers = {
-##    redeployment = [
-##      aws_apigatewayv2_authorizer.barbot,
-##      aws_apigatewayv2_route.webhook,
-##      aws_apigatewayv2_integration.webhook
-##    ]
-##  }
-#
-#
-#
-##  triggers = {
-##    // TODO: This sucks and is hacky
-##    redeployment = filesha1("rest_api_schema.tf")
-##  }
-#
-#  lifecycle {
-#    create_before_destroy = true
-#  }
-#}
 
 #
 # Stage and Stage Settings
 #
 
 resource "aws_apigatewayv2_stage" "barbot" {
-  name    = "barbot"
-  # deployment_id = aws_apigatewayv2_deployment.barbot.id
+  name    = "${var.prefix}"
   api_id   = aws_apigatewayv2_api.barbot.id
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.apigateway.arn
@@ -148,7 +107,7 @@ resource "aws_apigatewayv2_stage" "barbot" {
 }
 
 resource "aws_cloudwatch_log_group" "apigateway" {
-  name = "barbot-apigateway"
+  name = "${var.prefix}-apigateway"
 }
 
 
@@ -157,7 +116,7 @@ resource "aws_cloudwatch_log_group" "apigateway" {
 #
 
 resource "aws_apigatewayv2_authorizer" "barbot" {
-  name                   = "barbot"
+  name                   = "${var.prefix}"
   api_id                 = aws_apigatewayv2_api.barbot.id
   authorizer_type        = "REQUEST"
   authorizer_uri         = aws_lambda_function.authorizer.invoke_arn

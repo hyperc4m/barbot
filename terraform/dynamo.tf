@@ -1,6 +1,6 @@
 
 resource "aws_dynamodb_table" "barnight_week" {
-  name         = "barnight_week"
+  name         = "${var.prefix}_week"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "id"
 

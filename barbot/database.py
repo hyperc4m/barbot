@@ -47,7 +47,7 @@ def set_current_poll_id(poll_id: int) -> None:
 
 def make_suggestion(k: str, v: Dict[str, Any]) -> Suggestion:
     m = v['M']
-    return Suggestion(k, m['name']['S'], m['user_id']['N'], m['user_handle']['S'])
+    return Suggestion(k, m['name']['S'], int(m['user_id']['N']), m['user_handle']['S'])
 
 
 def get_current_suggestions(bypass_cache=False) -> List[Suggestion]:

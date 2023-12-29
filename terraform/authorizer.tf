@@ -16,7 +16,7 @@ data "aws_iam_policy_document" "authorizer" {
 }
 
 resource "aws_iam_role" "authorizer" {
-  name = "barbot_authorizer"
+  name = "${var.prefix}_authorizer"
   assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -34,13 +34,13 @@ resource "aws_iam_role" "authorizer" {
 EOF
 
   inline_policy {
-    name = "barbot_authorizer_policy"
+    name = "${var.prefix}_authorizer_policy"
     policy = data.aws_iam_policy_document.authorizer.json
   }
 }
 
 resource "aws_lambda_function" "authorizer" {
-  function_name = "barbot_authorizer"
+  function_name = "${var.prefix}_authorizer"
   filename      = data.archive_file.lambda_archive.output_path
   role          = aws_iam_role.authorizer.arn
   handler       = "barbot.authorizer.handle_auth"

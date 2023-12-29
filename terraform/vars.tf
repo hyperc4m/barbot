@@ -1,3 +1,8 @@
+variable "prefix" {
+  description = "Prefix for all AWS resource names"
+  type        = string
+}
+
 variable "aws_region" {
   default     = "us-west-2"
   description = "AWS Region to deploy resources to."

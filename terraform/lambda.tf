@@ -16,12 +16,12 @@ data "aws_iam_policy_document" "lambda_assume_role_policy" {
 
 
 resource "aws_iam_role" "api" {
-  name = "barbot_lambda_role"
+  name = "${var.prefix}_lambda_role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role_policy.json
 }
 
 resource "aws_iam_policy" "lambda_policy" {
-  name = "barbot_application_policy"
+  name = "${var.prefix}_application_policy"
   policy = <<EOF
 {
     "Version": "2012-10-17",
@@ -63,10 +63,6 @@ resource "aws_iam_role_policy_attachment" "app_policy_for_api_lambda" {
   policy_arn = aws_iam_policy.lambda_policy.arn
 }
 
-#resource "aws_iam_role_policy_attachment" "patreon_parameters_policy_for_api_lambda" {
-#  role = aws_iam_role.iam_for_lambda.name
-#  policy_arn = aws_iam_policy.access_patreonlink_parameters.arn
-#}
 
 data "archive_file" "lambda_archive" {
   source_dir = "../build/lambda_stage"
@@ -88,7 +84,7 @@ locals {
 resource "aws_lambda_function" "api" {
   for_each = local.functions
 
-  function_name = "barnight-${each.key}"
+  function_name = "${var.prefix}-${each.key}"
   filename      = data.archive_file.lambda_archive.output_path
   role          = aws_iam_role.api.arn
   handler       = each.value.handler
@@ -122,7 +118,7 @@ data "archive_file" "libs" {
 }
 
 resource "aws_lambda_layer_version" "libs" {
-  layer_name = "barnight-libs"
+  layer_name = "${var.prefix}-libs"
   filename = data.archive_file.libs.output_path
   source_code_hash = data.archive_file.libs.output_base64sha256
   compatible_runtimes = ["python3.9"]

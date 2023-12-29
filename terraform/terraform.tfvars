@@ -1,0 +1,17 @@
+aws_region           = "us-west-2"
+bot_username         = "CityFursBarBot"
+timezone             = "America/Los_Angeles"
+#first_reminder_cron  = "0 10 ? * MON *"
+#create_poll_cron     = "0 18 ? * MON *"
+#last_call_cron       = "0 10 ? * TUE *"
+#close_poll_cron      = "0 18 ? * TUE *"
+
+first_reminder_cron  = "0/10 * ? * * *"
+create_poll_cron     = "3/10 * ? * * *"
+last_call_cron       = "5/10 * ? * * *"
+close_poll_cron      = "8/10 * ? * * *"
+#first_reminder_cron  = "0 * ? * * *"
+#create_poll_cron     = "15 * ? * * *"
+#last_call_cron       = "30 * ? * * *"
+#close_poll_cron      = "45 * ? * * *"
+

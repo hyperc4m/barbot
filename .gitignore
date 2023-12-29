@@ -1,6 +1,6 @@
 venv
 build
-sensitive.tfvars
+terraform.tfvars
 *.tfstate
 *.backup
 .terraform

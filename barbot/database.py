@@ -115,6 +115,20 @@ def add_suggestion(hex_uuid: str, venue: str, user_id: int, user_handle: str):
     )
 
 
+def remove_suggestion(hex_uuid: str):
+    dynamodb.update_item(
+        TableName=app.DYNAMO_WEEK_TABLE_NAME,
+        Key={'id': {'S': 'current'}},
+        UpdateExpression='REMOVE venues.#uuid',
+        ExpressionAttributeNames={
+            '#uuid': hex_uuid
+        }
+    )
+    # Invalidate the cache
+    global last_suggestions_update_time
+    last_suggestions_update_time = datetime.datetime(day=1, month=1, year=1)
+
+
 cached_membership: Dict[int, Tuple[str, datetime.datetime]] = {}
 
 

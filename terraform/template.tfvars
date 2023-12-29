@@ -1,3 +1,6 @@
+telegram_bot_token   = ""
+main_chat_id         = ""
+
 aws_region           = "us-west-2"
 bot_username         = "CityFursBarBot"
 timezone             = "America/Los_Angeles"

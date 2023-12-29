@@ -24,7 +24,8 @@ def handle_function_call(event: Dict[str, Any], context: Dict[str, Any]) -> Dict
 async def handle_ask_for_suggestions(event: Dict[str, Any]) -> Dict[str, Any]:
     await bot.send_message(
         chat_id=app.MAIN_CHAT_ID,
-        text=f'It\'s time for bar night suggestions! Message @{app.BOT_USERNAME} to input a suggestion!'
+        text=f'It\'s time for bar night suggestions! Message @{app.BOT_USERNAME} or end a message with '
+             f'{app.BARNIGHT_HASHTAG} to input a suggestion!'
     )
     return {}
 

@@ -115,18 +115,18 @@ def add_suggestion(hex_uuid: str, venue: str, user_id: int, user_handle: str):
     )
 
 
-cached_membership: Dict[int, Tuple[bool, datetime.datetime]] = {}
+cached_membership: Dict[int, Tuple[str, datetime.datetime]] = {}
 
 
-async def is_user_part_of_main_chat(bot: telegram.Bot, user_id: int) -> bool:
+async def get_user_status_in_main_chat(bot: telegram.Bot, user_id: int) -> str:
     now = datetime.datetime.utcnow()
 
     cached_result = cached_membership.get(user_id)
     if cached_result is not None:
-        is_member, last_lookup = cached_result
+        status, last_lookup = cached_result
         if last_lookup + CACHE_TTL > now:
             # cached result is still valid.
-            return is_member
+            return status
 
     result = await bot.get_chat_member(
         chat_id=app.MAIN_CHAT_ID,
@@ -135,8 +135,11 @@ async def is_user_part_of_main_chat(bot: telegram.Bot, user_id: int) -> bool:
 
     print(f'User status of user id {user_id} is {result.status}')
 
-    is_member = result.status in (telegram.ChatMember.OWNER, telegram.ChatMember.ADMINISTRATOR,
-                                  telegram.ChatMember.MEMBER, telegram.ChatMember.RESTRICTED)
+    cached_membership[user_id] = (result.status, now)
+    return result.status
 
-    cached_membership[user_id] = (is_member, now)
-    return is_member
+
+async def is_user_part_of_main_chat(bot: telegram.Bot, user_id: int) -> bool:
+    status = await get_user_status_in_main_chat(bot, user_id)
+    return status in (telegram.ChatMember.OWNER, telegram.ChatMember.ADMINISTRATOR,
+                      telegram.ChatMember.MEMBER, telegram.ChatMember.RESTRICTED)

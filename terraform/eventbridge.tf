@@ -19,13 +19,15 @@ locals {
   }
 }
 
+resource "aws_scheduler_schedule_group" "barbot" {
+  name = var.prefix
+}
 
-
-resource "aws_scheduler_schedule" "first_reminder" {
+resource "aws_scheduler_schedule" "schedules" {
   for_each = local.schedules
 
   name = "${var.prefix}_${each.key}"
-  group_name = "default"
+  group_name = aws_scheduler_schedule_group.barbot.name
   schedule_expression = "cron(${each.value.cron})"
   schedule_expression_timezone = var.timezone
 

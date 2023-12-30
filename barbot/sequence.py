@@ -7,7 +7,7 @@ from typing import Dict, Any, List
 
 import telegram
 
-from . import app, database, util
+from . import app, database, util, schedule_util
 
 bot = telegram.Bot(
     token=app.TELEGRAM_BOT_TOKEN
@@ -21,11 +21,13 @@ def handle_function_call(event: Dict[str, Any], context: Dict[str, Any]) -> Dict
 
 
 async def handle_ask_for_suggestions(event: Dict[str, Any]) -> Dict[str, Any]:
-    await bot.send_message(
-        chat_id=app.MAIN_CHAT_ID,
-        text=f'It\'s time for bar night suggestions! Message @{app.BOT_USERNAME} or end a message with '
-             f'{app.BARNIGHT_HASHTAG} to input a suggestion!'
-    )
+    text = f'It\'s time for bar night suggestions! Message @{app.BOT_USERNAME} or end a message with ' \
+           f'{app.BARNIGHT_HASHTAG} to input a suggestion!'
+    poll_time = schedule_util.get_schedule_time(app.CREATE_POLL_SCHEDULE_NAME)
+    if poll_time:
+        text += f' Poll will be created on {poll_time}.'
+
+    await bot.send_message(chat_id=app.MAIN_CHAT_ID, text=text)
     return {}
 
 
@@ -79,9 +81,14 @@ async def handle_poll_reminder(event: Dict[str, Any]) -> Dict[str, Any]:
     if not poll_id:
         return {}
 
+    text = "REMINDER: Don't forget to vote!"
+    close_time = schedule_util.get_schedule_time(app.CLOSE_POLL_SCHEDULE_NAME)
+    if close_time:
+        text += f' The poll will close on {close_time}.'
+
     await bot.send_message(
         chat_id=app.MAIN_CHAT_ID,
-        text="REMINDER: Don't forget to vote!",
+        text=text,
         reply_to_message_id=poll_id
     )
     return {}
@@ -92,12 +99,6 @@ async def handle_choose_winner(event: Dict[str, Any]) -> Dict[str, Any]:
 
     if poll_id is None:
         return {}
-        # await bot.send_message(
-        #     chat_id=app.MAIN_CHAT_ID,
-        #     text="...this is awkward. I seem to have forgotten where the poll is."
-        #          " Please find the poll and make a decision manually."
-        # )
-        # return {}
 
     poll = await bot.stop_poll(
         chat_id=app.MAIN_CHAT_ID,

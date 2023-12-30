@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+import argparse
 import os
 import shutil
 import sys
 
-include_libs = '--skip-libs' not in sys.argv
+argparser = argparse.ArgumentParser()
+argparser.add_argument('--skip-libs', action='store_true')
+args = argparser.parse_args()
+include_libs = not args.skip_libs
 
 os.chdir(os.path.normpath(os.path.join(__file__, '..')))
 

@@ -115,10 +115,21 @@ async def handle_choose_winner(event: Dict[str, Any]) -> Dict[str, Any]:
     if poll_id is None:
         return {}
 
-    poll = await bot.stop_poll(
-        chat_id=app.MAIN_CHAT_ID,
-        message_id=poll_id
-    )
+    try:
+        poll = await bot.stop_poll(
+            chat_id=app.MAIN_CHAT_ID,
+            message_id=poll_id
+        )
+    except:
+        traceback.print_exc()
+        error_message_result = await bot.send_message(
+            app.MAIN_CHAT_ID,
+            'Oh no! I was unable to close the poll for barnight! '
+            'Please close the poll (if it wasn\'t closed already) and declare a winner for me.'
+        )
+        database.set_current_poll_id(0)
+        await bot.pin_chat_message(chat_id=app.MAIN_CHAT_ID, message_id=error_message_result.message_id)
+        return {}
 
     top_options: List[telegram.PollOption] = []
     max_votes = 0
@@ -133,14 +144,14 @@ async def handle_choose_winner(event: Dict[str, Any]) -> Dict[str, Any]:
 
     chosen_option = random.choice(top_options)
 
-    text = f'*{chosen_option.text}*'
+    text = f'*{util.escape_markdown_v2(chosen_option.text)}*'
     bar = bars.Bars(app.BAR_SPREADSHEET).match_bar(chosen_option.text)
     if bar:
         link = f'https://www.google.com/maps/dir/?api=1&destination={bar.latitude},{bar.longitude}'
         text = f'[{text}]({link})'
-    message = f'Calling it for {text}\!'
+    message = f'Calling it for {text}\\!'
     if len(top_options) > 1:
-        message += f' \(Chosen randomly out of the top {len(top_options)} options\)'
+        message += f' \\(Chosen randomly out of the top {len(top_options)} options\\)'
 
     message_result = await bot.send_message(
         chat_id=app.MAIN_CHAT_ID,

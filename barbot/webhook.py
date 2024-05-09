@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 
 import telegram
 
-from . import database, app, util, bars, geo
+from . import database, app, util, bars
 
 bot = telegram.Bot(
     token=app.TELEGRAM_BOT_TOKEN
@@ -124,7 +124,6 @@ async def add_suggestion(venue: str, user_id: int, username: str) -> None:
                  f'which was already suggested by {found_suggestion.user_handle}'
         )
     else:
-
         if len(suggestions) >= app.MAX_SUGGESTIONS:
             await bot.send_message(
                 chat_id=app.MAIN_CHAT_ID,
@@ -151,7 +150,7 @@ async def add_suggestion(venue: str, user_id: int, username: str) -> None:
             # Send message to the main chat to let people know that a suggestion was added.
             await bot.send_message(
                 chat_id=app.MAIN_CHAT_ID,
-                text=f'@{username} has successfully suggested "{text}" for the next {util.escape_markdown_v2(app.BARNIGHT_HASHTAG)} poll\!',
+                text=f'@{util.escape_markdown_v2(username)} has successfully suggested "{util.escape_markdown_v2(text)}" for the next {util.escape_markdown_v2(app.BARNIGHT_HASHTAG)} poll\\!',
                 parse_mode='MarkdownV2',
                 disable_web_page_preview=True,
             )

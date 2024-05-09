@@ -53,3 +53,16 @@ An invocation should look something like this:
 ```
 echo '{"barnight_event_type": "CreatePoll"}' | sam local invoke SequenceFunction --docker-network barbot --env-vars env.json -e -
 ```
+
+## Building & Deploying
+
+1. Install the version of python currently being targeted by the lambda runtime (See lambda.tf. At the time of writing, this is Python 3.12)
+
+2. Create a virtual environment using that python version. `python3.12 -m venv venv`
+
+3. Activate the virtual environment and run ./build.py
+
+4. In the `terraform` directory, Copy a template .tfvars file to terraform.tfvars. Set the empty values.
+
+5. Use `terraform workspace show` and `terraform workspace select` to choose the correct terraform state to use. 
+   `default` workspace is used for prod, and `test` is used for the 'testing' bot and channel.

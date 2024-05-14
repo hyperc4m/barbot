@@ -27,7 +27,7 @@ else:
     dynamodb = boto3.client('dynamodb')
 
 
-def get_current_poll_id() -> Optional[int]:
+def get_current_poll_id() -> int:
     result = dynamodb.get_item(
         TableName=app.DYNAMO_WEEK_TABLE_NAME,
         Key={'id': {'S': 'current'}},

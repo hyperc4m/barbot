@@ -112,7 +112,7 @@ async def handle_poll_reminder(event: Dict[str, Any]) -> Dict[str, Any]:
 async def handle_choose_winner(event: Dict[str, Any]) -> Dict[str, Any]:
     poll_id = database.get_current_poll_id()
 
-    if poll_id is None:
+    if not poll_id:
         return {}
 
     try:

@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - v[0-9]+.*
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -61,4 +62,9 @@ jobs:
 
     - name: Terraform Apply
       working-directory: ./terraform
-      run: terraform apply -auto-approve -input=false
+      run: >-
+        terraform apply -auto-approve -input=false
+        -var telegram_bot_token="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+        -var main_chat_id="${{ secrets.MAIN_CHAT_ID }}"
+        -var bar_spreadsheet="${{ secrets.BAR_SPREADSHEET }}"
+        -var selenium_server_url="${{ secrets.SELENIUM_SERVER_URL }}"

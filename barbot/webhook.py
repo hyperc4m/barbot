@@ -11,6 +11,7 @@ import telegram
 
 from . import database, app, util, bars
 
+assert app.TELEGRAM_BOT_TOKEN is not None
 bot = telegram.Bot(
     token=app.TELEGRAM_BOT_TOKEN
 )

@@ -16,6 +16,7 @@ def handle_function_call(event: Dict[str, Any], context: Dict[str, Any]) -> Dict
     event_type = event['barnight_event_type']
     func = event_funcs[event_type]
     db = database.DynamoDatabase()
+    assert app.TELEGRAM_BOT_TOKEN is not None
     bot = telegram.Bot(
         token=app.TELEGRAM_BOT_TOKEN
     )

@@ -15,6 +15,8 @@ bot = telegram.Bot(
     token=app.TELEGRAM_BOT_TOKEN
 )
 
+db = database.DynamoDatabase()
+
 BARS = bars.Bars(app.BAR_SPREADSHEET)
 
 
@@ -41,13 +43,16 @@ async def handle_webhook_async(body: Dict[str, Any]) -> Optional[Dict[str, Any]]
     update = telegram.Update.de_json(body, bot)
     if not update:
         error('Failed to parse Update body')
-        return
+        return None
 
     if update.inline_query is not None:
         return await handle_inline_query(update, update.inline_query)
 
     if update.message is not None:
         await handle_message(update, update.message)
+        return None
+
+    return None
 
 
 async def handle_inline_query(udpate: telegram.Update, query: telegram.InlineQuery) -> Optional[Dict[str, Any]]:
@@ -57,7 +62,7 @@ async def handle_inline_query(udpate: telegram.Update, query: telegram.InlineQue
     query_text = query.query
     answers = []
     if query_text and is_member:
-        current_suggestions = database.get_current_suggestions()
+        current_suggestions = db.get_current_suggestions()
         possibilities = [x.venue for x in current_suggestions]
         suggestions_by_name = {s.venue: s for s in current_suggestions}
         matches = difflib.get_close_matches(query_text, possibilities, n=5, cutoff=0.1)
@@ -105,7 +110,7 @@ async def add_suggestion(venue: str, user_id: int, username: str) -> None:
     bar = BARS.match_bar(venue)
     venue = bar.name if bar else venue
 
-    suggestions = database.get_current_suggestions(bypass_cache=True)
+    suggestions = db.get_current_suggestions(bypass_cache=True)
 
     found_suggestion: Optional[database.Suggestion] = None
 
@@ -133,7 +138,7 @@ async def add_suggestion(venue: str, user_id: int, username: str) -> None:
         else:
             venue_uuid = uuid.uuid4().hex
             try:
-                database.add_suggestion(venue_uuid, venue, user_id, username)
+                db.add_suggestion(venue_uuid, venue, user_id, username)
             except:
                 traceback.print_exc()
                 await bot.send_message(
@@ -157,6 +162,10 @@ async def add_suggestion(venue: str, user_id: int, username: str) -> None:
 
 
 async def handle_message(update: telegram.Update, message: telegram.Message):
+    # Can't do anything if we don't know who sent this message.
+    if message.from_user is None:
+        return
+
     # Don't accept input from other bots.
     if message.from_user.is_bot:
         return
@@ -184,12 +193,12 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
                     'Usage: /delete <venue_name>'
                 )
             else:
-                suggestions = database.get_current_suggestions(bypass_cache=False)
+                suggestions = db.get_current_suggestions(bypass_cache=False)
                 suggestion = next((s for s in suggestions if s.venue.lower() == venue_name.lower()), None)
                 if suggestion:
                     if is_admin or message.from_user.id == suggestion.user_id:
                         try:
-                            database.remove_suggestion(suggestion.uuid)
+                            db.remove_suggestion(suggestion.uuid)
                         except:
                             await bot.send_message(
                                 message.chat.id,
@@ -220,7 +229,7 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
 
         elif message_lower.startswith('/list') or message_lower == '/list':
             if await database.is_user_part_of_main_chat(bot, message.from_user.id):
-                suggestions = database.get_current_suggestions()
+                suggestions = db.get_current_suggestions()
                 message_text = 'Current suggested venues:\n\n'
                 message_text += util.get_list_suggestions_message_text(suggestions)
                 await bot.send_message(message.chat.id, message_text)
@@ -238,7 +247,7 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
             )
             try:
                 png, message_text = await util.get_map_suggestions_message_data(
-                    BARS, database.get_current_suggestions(bypass_cache=False),
+                    BARS, db.get_current_suggestions(bypass_cache=False),
                 )
             except Exception as err:
                 print(f'Map rendering failed: {err}')
@@ -285,4 +294,4 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
                 pass
             else:
                 suggestion_text = left_of_hashtag if len(left_of_hashtag) > len(right_of_hashtag) else right_of_hashtag
-                await add_suggestion(suggestion_text, message.from_user.id, message.from_user.username)
+                await add_suggestion(suggestion_text, message.from_user.id, message.from_user.username or 'unknown')

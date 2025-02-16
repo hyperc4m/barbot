@@ -3,24 +3,26 @@ Lambda functions intended to be called from Step Functions go here
 """
 import random
 import traceback
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Callable, Awaitable
 
 import telegram
 
 from . import app, bars, database, util, schedule_util
-
-bot = telegram.Bot(
-    token=app.TELEGRAM_BOT_TOKEN
-)
+from .database import Database
 
 
+# This is the entry point called from the sequence lambda function.
 def handle_function_call(event: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     event_type = event['barnight_event_type']
     func = event_funcs[event_type]
-    return app.asyncio_loop.run_until_complete(func(event))
+    db = database.DynamoDatabase()
+    bot = telegram.Bot(
+        token=app.TELEGRAM_BOT_TOKEN
+    )
+    return app.asyncio_loop.run_until_complete(func(event, db, bot))
 
 
-async def handle_ask_for_suggestions(event: Dict[str, Any]) -> Dict[str, Any]:
+async def handle_ask_for_suggestions(event: Dict[str, Any], db: Database, bot: telegram.Bot) -> Dict[str, Any]:
     text = f'It\'s time for bar night suggestions! Message @{app.BOT_USERNAME} or end a message with ' \
            f'{app.BARNIGHT_HASHTAG} to input a suggestion!'
     poll_time = schedule_util.get_schedule_time(app.CREATE_POLL_SCHEDULE_NAME)
@@ -31,9 +33,9 @@ async def handle_ask_for_suggestions(event: Dict[str, Any]) -> Dict[str, Any]:
     return {}
 
 
-async def handle_create_poll(event: Dict[str, Any]) -> Dict[str, Any]:
-    database.set_current_poll_id(0)
-    suggestions = database.get_current_suggestions(bypass_cache=True)
+async def handle_create_poll(event: Dict[str, Any], db: Database, bot: telegram.Bot) -> Dict[str, Any]:
+    db.set_current_poll_id(0)
+    suggestions = db.get_current_suggestions(bypass_cache=True)
 
     if len(suggestions) == 0:
         send_message_result = await bot.send_message(
@@ -75,24 +77,24 @@ async def handle_create_poll(event: Dict[str, Any]) -> Dict[str, Any]:
                 app.MAIN_CHAT_ID,
                 'Oh no! I was unable to create a poll for barnight! Please continue the process manually. '
                 'Here is the list of suggested venues:\n\n'
-                + util.get_list_suggestions_message_text(database.get_current_suggestions(bypass_cache=True))
+                + util.get_list_suggestions_message_text(db.get_current_suggestions(bypass_cache=True))
             )
-            database.clear_suggestions()
+            db.clear_suggestions()
             await bot.pin_chat_message(chat_id=app.MAIN_CHAT_ID, message_id=error_message_result.message_id)
             return {}
 
         poll_id = send_poll_result.id
-        database.set_current_poll_id(poll_id)
+        db.set_current_poll_id(poll_id)
         await bot.pin_chat_message(chat_id=app.MAIN_CHAT_ID, message_id=poll_id)
 
     # TODO: if `bot.pin_chat_message` fails, this will never be called,
     # which means we'll re-use the suggestions next round
-    database.clear_suggestions()
+    db.clear_suggestions()
     return {}
 
 
-async def handle_poll_reminder(event: Dict[str, Any]) -> Dict[str, Any]:
-    poll_id = database.get_current_poll_id()
+async def handle_poll_reminder(event: Dict[str, Any], db: Database, bot: telegram.Bot) -> Dict[str, Any]:
+    poll_id = db.get_current_poll_id()
     if not poll_id:
         return {}
 
@@ -109,8 +111,8 @@ async def handle_poll_reminder(event: Dict[str, Any]) -> Dict[str, Any]:
     return {}
 
 
-async def handle_choose_winner(event: Dict[str, Any]) -> Dict[str, Any]:
-    poll_id = database.get_current_poll_id()
+async def handle_choose_winner(event: Dict[str, Any], db: Database, bot: telegram.Bot) -> Dict[str, Any]:
+    poll_id = db.get_current_poll_id()
 
     if not poll_id:
         return {}
@@ -127,7 +129,7 @@ async def handle_choose_winner(event: Dict[str, Any]) -> Dict[str, Any]:
             'Oh no! I was unable to close the poll for barnight! '
             'Please close the poll (if it wasn\'t closed already) and declare a winner for me.'
         )
-        database.set_current_poll_id(0)
+        db.set_current_poll_id(0)
         await bot.pin_chat_message(chat_id=app.MAIN_CHAT_ID, message_id=error_message_result.message_id)
         return {}
 
@@ -151,7 +153,7 @@ async def handle_choose_winner(event: Dict[str, Any]) -> Dict[str, Any]:
         text = f'[{text}]({link})'
     message = f'Calling it for {text}\\!'
     if len(top_options) > 1:
-        message += f' \\(Chosen randomly out of the top {len(top_options)} options\\)'
+        message += util.escape_markdown_v2(f' (Chosen randomly out of the top {len(top_options)} options)')
 
     message_result = await bot.send_message(
         chat_id=app.MAIN_CHAT_ID,
@@ -166,7 +168,7 @@ async def handle_choose_winner(event: Dict[str, Any]) -> Dict[str, Any]:
         message_id=message_result.id,
     )
 
-    database.set_current_poll_id(0)
+    db.set_current_poll_id(0)
     return {}
 
 
@@ -175,7 +177,9 @@ EVENT_TYPE_CREATE_POLL = 'CreatePoll'
 EVENT_TYPE_POLL_REMINDER = "PollReminder"
 EVENT_TYPE_CHOOSE_WINNER = "ChooseWinner"
 
-event_funcs = {
+ScheduleCallable = Callable[[Dict[str, Any], database.Database, telegram.Bot], Awaitable[Dict[str, Any]]]
+
+event_funcs: Dict[str, ScheduleCallable] = {
     EVENT_TYPE_ASK_FOR_SUGGESTIONS: handle_ask_for_suggestions,
     EVENT_TYPE_CREATE_POLL: handle_create_poll,
     EVENT_TYPE_POLL_REMINDER: handle_poll_reminder,

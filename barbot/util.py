@@ -25,5 +25,5 @@ async def get_map_suggestions_message_data(bars: Bars, suggestions: List[Suggest
 
 
 def escape_markdown_v2(text: str) -> str:
-    markdown = {'_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}'}
+    markdown = {'_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.'}
     return ''.join('\\' + c if c in markdown else c for c in text)

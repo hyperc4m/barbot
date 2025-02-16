@@ -5,19 +5,21 @@ import croniter
 import dateutil.tz
 import re
 from typing import Optional
+from mypy_boto3_scheduler import EventBridgeSchedulerClient
 
 import boto3
 
 from . import app
 
 
-scheduler = boto3.client('scheduler')
+def make_scheduler() -> EventBridgeSchedulerClient:
+    return boto3.client('scheduler')
 
 
 cron_regex = re.compile(r'cron\(\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*\)')
 
 
-def get_schedule_time(schedule_name: str) -> Optional[str]:
+def get_schedule_time(scheduler: EventBridgeSchedulerClient, schedule_name: str) -> Optional[str]:
     try:
         result = scheduler.get_schedule(
             GroupName=app.SCHEDULE_GROUP_NAME,

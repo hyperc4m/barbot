@@ -6,9 +6,17 @@ import traceback
 from typing import Dict, Any, List, Callable, Awaitable
 
 import telegram
+from mypy_boto3_scheduler import EventBridgeSchedulerClient
 
 from . import app, bars, database, util, schedule_util
 from .database import Database
+
+
+class SequenceServices(object):
+    def __init__(self, db: Database, bot: telegram.Bot, scheduler: EventBridgeSchedulerClient):
+        self.db = db
+        self.bot = bot
+        self.scheduler = scheduler
 
 
 # This is the entry point called from the sequence lambda function.
@@ -20,21 +28,25 @@ def handle_function_call(event: Dict[str, Any], context: Dict[str, Any]) -> Dict
     bot = telegram.Bot(
         token=app.TELEGRAM_BOT_TOKEN
     )
-    return app.asyncio_loop.run_until_complete(func(event, db, bot))
+    scheduler = schedule_util.make_scheduler()
+    services = SequenceServices(db, bot, scheduler)
+    return app.asyncio_loop.run_until_complete(func(event, services))
 
 
-async def handle_ask_for_suggestions(event: Dict[str, Any], db: Database, bot: telegram.Bot) -> Dict[str, Any]:
+async def handle_ask_for_suggestions(event: Dict[str, Any], services: SequenceServices) -> Dict[str, Any]:
     text = f'It\'s time for bar night suggestions! Message @{app.BOT_USERNAME} or end a message with ' \
            f'{app.BARNIGHT_HASHTAG} to input a suggestion!'
     poll_time = schedule_util.get_schedule_time(app.CREATE_POLL_SCHEDULE_NAME)
     if poll_time:
         text += f' Poll will be created on {poll_time}.'
 
-    await bot.send_message(chat_id=app.MAIN_CHAT_ID, text=text)
+    await services.bot.send_message(chat_id=app.MAIN_CHAT_ID, text=text)
     return {}
 
 
-async def handle_create_poll(event: Dict[str, Any], db: Database, bot: telegram.Bot) -> Dict[str, Any]:
+async def handle_create_poll(event: Dict[str, Any], services: SequenceServices) -> Dict[str, Any]:
+    db = services.db
+    bot = services.bot
     db.set_current_poll_id(0)
     suggestions = db.get_current_suggestions(bypass_cache=True)
 
@@ -94,8 +106,8 @@ async def handle_create_poll(event: Dict[str, Any], db: Database, bot: telegram.
     return {}
 
 
-async def handle_poll_reminder(event: Dict[str, Any], db: Database, bot: telegram.Bot) -> Dict[str, Any]:
-    poll_id = db.get_current_poll_id()
+async def handle_poll_reminder(event: Dict[str, Any], services: SequenceServices) -> Dict[str, Any]:
+    poll_id = services.db.get_current_poll_id()
     if not poll_id:
         return {}
 
@@ -104,7 +116,7 @@ async def handle_poll_reminder(event: Dict[str, Any], db: Database, bot: telegra
     if close_time:
         text += f' The poll will close on {close_time}.'
 
-    await bot.send_message(
+    await services.bot.send_message(
         chat_id=app.MAIN_CHAT_ID,
         text=text,
         reply_to_message_id=poll_id
@@ -112,7 +124,9 @@ async def handle_poll_reminder(event: Dict[str, Any], db: Database, bot: telegra
     return {}
 
 
-async def handle_choose_winner(event: Dict[str, Any], db: Database, bot: telegram.Bot) -> Dict[str, Any]:
+async def handle_choose_winner(event: Dict[str, Any], services: SequenceServices) -> Dict[str, Any]:
+    db = services.db
+    bot = services.bot
     poll_id = db.get_current_poll_id()
 
     if not poll_id:
@@ -178,7 +192,7 @@ EVENT_TYPE_CREATE_POLL = 'CreatePoll'
 EVENT_TYPE_POLL_REMINDER = "PollReminder"
 EVENT_TYPE_CHOOSE_WINNER = "ChooseWinner"
 
-ScheduleCallable = Callable[[Dict[str, Any], database.Database, telegram.Bot], Awaitable[Dict[str, Any]]]
+ScheduleCallable = Callable[[Dict[str, Any], SequenceServices], Awaitable[Dict[str, Any]]]
 
 event_funcs: Dict[str, ScheduleCallable] = {
     EVENT_TYPE_ASK_FOR_SUGGESTIONS: handle_ask_for_suggestions,

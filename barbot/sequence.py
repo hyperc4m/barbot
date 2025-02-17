@@ -187,8 +187,8 @@ async def handle_choose_winner(event: Dict[str, Any], services: SequenceServices
 
     message = ''
     chat_id = app_settings.MAIN_CHAT_ID
-    if app_settings.PUBLIC_ANNOUNCEMENT_ID:
-        chat_id = app_settings.PUBLIC_ANNOUNCEMENT_ID
+    if app_settings.ANNOUNCEMENT_CHAT_ID:
+        chat_id = app_settings.ANNOUNCEMENT_CHAT_ID
         message = f'The next bar night will be held at {bar_name_markdown}\\.'
     else:
         message = f'Calling it for {bar_name_markdown}\\!'

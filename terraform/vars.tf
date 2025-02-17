@@ -14,6 +14,12 @@ variable "main_chat_id" {
   type        = string
 }
 
+variable "announcement_chat_id" {
+  description = ""
+  type        = string
+  default     = ""
+}
+
 variable "bot_username" {
   description = "Telegram username of the bot. Don't include the @."
   type        = string

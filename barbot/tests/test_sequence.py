@@ -92,13 +92,13 @@ class TestChooseWinner(unittest.IsolatedAsyncioTestCase):
             telegram.PollOption(f'Dingles', 6),
         ])
         mock_services.app_settings.MAIN_CHAT_ID = 12345
-        mock_services.app_settings.PUBLIC_ANNOUNCEMENT_ID = 67890
+        mock_services.app_settings.ANNOUNCEMENT_CHAT_ID = 67890
 
         result = await sequence.handle_choose_winner({}, mock_services.make_services())
 
         expected_message = 'The next bar night will be held at Dingles\\.'
         mock_services.bot.return_value.send_message.assert_called_with(
-            chat_id=mock_services.app_settings.PUBLIC_ANNOUNCEMENT_ID, text=ANY, parse_mode=ANY,
+            chat_id=mock_services.app_settings.ANNOUNCEMENT_CHAT_ID, text=ANY, parse_mode=ANY,
             disable_web_page_preview=ANY, reply_to_message_id=ANY)
         mock_services.bot.return_value.pin_chat_message.assert_not_called()
 

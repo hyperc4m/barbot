@@ -17,9 +17,10 @@ async def get_map_suggestions_message_data(bars: Bars, suggestions: List[Suggest
     letter_map, png = await geo.map_bars_to_png(barlist, (720, 720), app)
     if not png:
         return bytes(), ''
-    location_text = '\n'.join([f'*{letter}*: {bar.name}' for letter, bar in sorted(letter_map.items())] + [f'?: {n}' for n in unrecognised_names])
+    location_text = '\n'.join([f'*{letter}*: {escape_markdown_v2(bar.name)}' for letter, bar in sorted(letter_map.items())] + [f'?: {escape_markdown_v2(n)}' for n in unrecognised_names])
     # photo captions can only be 1024 characters long
-    text = escape_markdown_v2(f'The currently suggested bars:\n{location_text}')[:1000]
+    # TODO: How do we make sure we don't strip out markdown characters? Will telegram fail us for omitting closing markdown?
+    text = f'The currently suggested bars:\n{location_text}'[:1000]
     # In case we chop an escaped character, strip off any trailing backslashes
     text.rstrip('\\')
     return png, text

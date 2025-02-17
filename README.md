@@ -1,5 +1,7 @@
 # barbot
 
+Barbot is a Telegram bot that automates decision making for our weekly bar night.
+
 ## Running the Bot Locally
 
 0. Ensure the [aws](https://aws.amazon.com/cli/) and [sam](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) CLI tools are install.

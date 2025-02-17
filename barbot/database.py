@@ -5,8 +5,7 @@ from typing import List, Optional, Dict, Any, Tuple
 import boto3
 import telegram
 
-from . import app
-
+from .app import AppSettings, MAX_SUGGESTIONS
 
 CACHE_TTL = datetime.timedelta(seconds=3)
 
@@ -58,7 +57,8 @@ class Database(abc.ABC):
 
 
 class DynamoDatabase(Database):
-    def __init__(self):
+    def __init__(self, app: AppSettings):
+        self.app = app
         if app.DYNAMODB_ENDPOINT_URL:
             self.dynamodb = boto3.client('dynamodb', endpoint_url=app.DYNAMODB_ENDPOINT_URL)
         else:
@@ -66,7 +66,7 @@ class DynamoDatabase(Database):
 
     def get_current_poll_id(self) -> int:
         result = self.dynamodb.get_item(
-            TableName=app.DYNAMO_WEEK_TABLE_NAME,
+            TableName=self.app.DYNAMO_WEEK_TABLE_NAME,
             Key={'id': {'S': 'current'}},
             ConsistentRead=True
         )
@@ -76,7 +76,7 @@ class DynamoDatabase(Database):
 
     def set_current_poll_id(self, poll_id: int) -> None:
         self.dynamodb.update_item(
-            TableName=app.DYNAMO_WEEK_TABLE_NAME,
+            TableName=self.app.DYNAMO_WEEK_TABLE_NAME,
             Key={'id': {'S': 'current'}},
             UpdateExpression='SET poll_id = :p',
             ExpressionAttributeValues={
@@ -92,7 +92,7 @@ class DynamoDatabase(Database):
             return cached_suggestions
 
         get_result = self.dynamodb.get_item(
-            TableName=app.DYNAMO_WEEK_TABLE_NAME,
+            TableName=self.app.DYNAMO_WEEK_TABLE_NAME,
             Key={'id': {'S': 'current'}}
         )
         item = get_result.get('Item')
@@ -107,7 +107,7 @@ class DynamoDatabase(Database):
 
     def get_suggestion_by_uuid(self, hex_uuid: str) -> Optional[Suggestion]:
         get_result = self.dynamodb.get_item(
-            TableName=app.DYNAMO_WEEK_TABLE_NAME,
+            TableName=self.app.DYNAMO_WEEK_TABLE_NAME,
             Key={'id': {'S': 'current'}},
         )
         venue_data = get_result.get('Item', {}).get('venues', {}).get('M', {}).get(hex_uuid)
@@ -120,7 +120,7 @@ class DynamoDatabase(Database):
         global cached_suggestions
         global last_suggestions_update_time
         self.dynamodb.update_item(
-            TableName=app.DYNAMO_WEEK_TABLE_NAME,
+            TableName=self.app.DYNAMO_WEEK_TABLE_NAME,
             Key={'id': {'S': 'current'}},
             UpdateExpression="SET venues = :empty",
             ExpressionAttributeValues={
@@ -135,7 +135,7 @@ class DynamoDatabase(Database):
         cached_suggestions.append(Suggestion(hex_uuid, venue, user_id, user_handle))
 
         self.dynamodb.update_item(
-            TableName=app.DYNAMO_WEEK_TABLE_NAME,
+            TableName=self.app.DYNAMO_WEEK_TABLE_NAME,
             Key={'id': {'S': 'current'}},
             UpdateExpression='SET venues.#uuid = :value',
             ConditionExpression='size(venues) < :max_suggestions',
@@ -148,14 +148,14 @@ class DynamoDatabase(Database):
                     'user_id': {'N': str(user_id)},
                     'user_handle': {'S': user_handle}
                 }},
-                ':max_suggestions': {'N': str(app.MAX_SUGGESTIONS)}
+                ':max_suggestions': {'N': str(MAX_SUGGESTIONS)}
             }
         )
 
 
     def remove_suggestion(self, hex_uuid: str):
         self.dynamodb.update_item(
-            TableName=app.DYNAMO_WEEK_TABLE_NAME,
+            TableName=self.app.DYNAMO_WEEK_TABLE_NAME,
             Key={'id': {'S': 'current'}},
             UpdateExpression='REMOVE venues.#uuid',
             ExpressionAttributeNames={
@@ -170,7 +170,7 @@ class DynamoDatabase(Database):
 cached_membership: Dict[int, Tuple[str, datetime.datetime]] = {}
 
 
-async def get_user_status_in_main_chat(bot: telegram.Bot, user_id: int) -> str:
+async def get_user_status_in_main_chat(bot: telegram.Bot, app: AppSettings, user_id: int) -> str:
     now = datetime.datetime.utcnow()
 
     cached_result = cached_membership.get(user_id)
@@ -191,12 +191,12 @@ async def get_user_status_in_main_chat(bot: telegram.Bot, user_id: int) -> str:
     return result.status
 
 
-async def is_user_part_of_main_chat(bot: telegram.Bot, user_id: int) -> bool:
-    status = await get_user_status_in_main_chat(bot, user_id)
+async def is_user_part_of_main_chat(bot: telegram.Bot, app: AppSettings, user_id: int) -> bool:
+    status = await get_user_status_in_main_chat(bot, app, user_id)
     return status in (telegram.ChatMember.OWNER, telegram.ChatMember.ADMINISTRATOR,
                       telegram.ChatMember.MEMBER, telegram.ChatMember.RESTRICTED)
 
 
-async def is_user_admin_of_main_chat(bot: telegram.Bot, user_id: int) -> bool:
-    status = await get_user_status_in_main_chat(bot, user_id)
+async def is_user_admin_of_main_chat(bot: telegram.Bot, app: AppSettings, user_id: int) -> bool:
+    status = await get_user_status_in_main_chat(bot, app, user_id)
     return status in (telegram.ChatMember.OWNER, telegram.ChatMember.ADMINISTRATOR)

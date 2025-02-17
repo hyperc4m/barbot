@@ -1,5 +1,6 @@
 import difflib
 import json
+import os
 import re
 import sys
 import traceback
@@ -9,16 +10,10 @@ from typing import Dict, Any, Optional
 
 import telegram
 
-from . import database, app, util, bars
-
-assert app.TELEGRAM_BOT_TOKEN is not None
-bot = telegram.Bot(
-    token=app.TELEGRAM_BOT_TOKEN
-)
-
-db = database.DynamoDatabase()
-
-BARS = bars.Bars(app.BAR_SPREADSHEET)
+from . import database, util
+from .app import AppSettings, MIN_VENUE_LENGTH, MAX_VENUE_LENGTH, BARNIGHT_HASHTAG, MAX_SUGGESTIONS, asyncio_loop
+from .bars import Bars
+from .database import Database
 
 
 def error(message: str):
@@ -26,11 +21,11 @@ def error(message: str):
     sys.stderr.write('\n')
     sys.stderr.flush()
 
-
+# This is the entry point for the webhook lambda function from AWS API gateway.
 def handle_webhook(event: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     body_json = event['body']
     body = json.loads(body_json)
-    result = app.asyncio_loop.run_until_complete(handle_webhook_async(body))
+    result = asyncio_loop.run_until_complete(handle_webhook_async(body))
 
     if result:
         return result
@@ -41,24 +36,35 @@ def handle_webhook(event: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, 
 async def handle_webhook_async(body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     print(f'Received webhook! {body}')
 
+    app_settings = AppSettings(os.environ)
+
+    assert app_settings.TELEGRAM_BOT_TOKEN is not None
+    bot = telegram.Bot(
+        token=app_settings.TELEGRAM_BOT_TOKEN
+    )
+
+    db = database.DynamoDatabase(app_settings)
+
+    bars = Bars(app_settings.BAR_SPREADSHEET)
+
     update = telegram.Update.de_json(body, bot)
     if not update:
         error('Failed to parse Update body')
         return None
 
     if update.inline_query is not None:
-        return await handle_inline_query(update, update.inline_query)
+        return await handle_inline_query(update, update.inline_query, db, bot, app_settings)
 
     if update.message is not None:
-        await handle_message(update, update.message)
+        await handle_message(update, update.message, db, bot, app_settings, bars)
         return None
 
     return None
 
 
-async def handle_inline_query(udpate: telegram.Update, query: telegram.InlineQuery) -> Optional[Dict[str, Any]]:
+async def handle_inline_query(udpate: telegram.Update, query: telegram.InlineQuery, db: Database, bot: telegram.Bot, app: AppSettings) -> Optional[Dict[str, Any]]:
     # Make sure the user is part of the chatroom
-    is_member = await database.is_user_part_of_main_chat(bot, user_id=query.from_user.id)
+    is_member = await database.is_user_part_of_main_chat(bot, app, user_id=query.from_user.id)
 
     query_text = query.query
     answers = []
@@ -74,7 +80,7 @@ async def handle_inline_query(udpate: telegram.Update, query: telegram.InlineQue
                 'id': hex_uuid,
                 'title': match_name,
                 'input_message_content': {
-                    'message_text': f'{match_name} {app.BARNIGHT_HASHTAG}'
+                    'message_text': f'{match_name} {BARNIGHT_HASHTAG}'
                 }
             }
 
@@ -93,22 +99,22 @@ async def handle_inline_query(udpate: telegram.Update, query: telegram.InlineQue
     }
 
 
-async def add_suggestion(venue: str, user_id: int, username: str) -> None:
+async def add_suggestion(venue: str, user_id: int, username: str, message_id: int, db: Database, bot: telegram.Bot, app: AppSettings, bars: Bars) -> None:
     venue = re.sub(r'\s+', ' ', venue).strip().lower().capitalize()
     venue = re.sub(r'\s\S', lambda m: m.group(0).title(), venue)
 
-    if len(venue) < app.MIN_VENUE_LENGTH:
+    if len(venue) < MIN_VENUE_LENGTH:
         return
-    if len(venue) > app.MAX_VENUE_LENGTH:
+    if len(venue) > MAX_VENUE_LENGTH:
         await bot.send_message(
             app.MAIN_CHAT_ID,
-            f'Sorry @{username}, venue suggestions must be between {app.MIN_VENUE_LENGTH} and {app.MAX_VENUE_LENGTH} '
+            f'Sorry @{username}, venue suggestions must be between {MIN_VENUE_LENGTH} and {MAX_VENUE_LENGTH} '
             f'characters long.'
         )
         return
 
     # try to use the canonical name of the bar (if we can find one)
-    bar = BARS.match_bar(venue)
+    bar = bars.match_bar(venue)
     venue = bar.name if bar else venue
 
     suggestions = db.get_current_suggestions(bypass_cache=True)
@@ -126,15 +132,15 @@ async def add_suggestion(venue: str, user_id: int, username: str) -> None:
     if found_suggestion is not None:
         await bot.send_message(
             chat_id=app.MAIN_CHAT_ID,
-            text=f'@{username} has suggested "{venue}" for {app.BARNIGHT_HASHTAG}, '
+            text=f'@{username} has suggested "{venue}" for {BARNIGHT_HASHTAG}, '
                  f'which was already suggested by {found_suggestion.user_handle}'
         )
     else:
-        if len(suggestions) >= app.MAX_SUGGESTIONS:
+        if len(suggestions) >= MAX_SUGGESTIONS:
             await bot.send_message(
                 chat_id=app.MAIN_CHAT_ID,
                 text=f'Sorry, I could not add @{username}\'s suggestion for "{venue}" since we have hit the max number '
-                     f'of suggestions for the next poll ({app.MAX_SUGGESTIONS}).'
+                     f'of suggestions for the next poll ({MAX_SUGGESTIONS}).'
             )
         else:
             venue_uuid = uuid.uuid4().hex
@@ -154,15 +160,15 @@ async def add_suggestion(venue: str, user_id: int, username: str) -> None:
                 venue_markdown = f'[{venue_markdown}]({link})'
 
             # Send message to the main chat to let people know that a suggestion was added.
-            await bot.send_message(
+            await bot.set_message_reaction(
                 chat_id=app.MAIN_CHAT_ID,
-                text=f'@{util.escape_markdown_v2(username)} has successfully suggested "{venue_markdown}" for the next {util.escape_markdown_v2(app.BARNIGHT_HASHTAG)} poll\\!',
-                parse_mode='MarkdownV2',
-                disable_web_page_preview=True,
+                message_id=message_id,
+                reaction=telegram.ReactionTypeEmoji(emoji='✍'),
+                is_big=False
             )
 
 
-async def handle_message(update: telegram.Update, message: telegram.Message):
+async def handle_message(update: telegram.Update, message: telegram.Message, db: Database, bot: telegram.Bot, app: AppSettings, bars: Bars) -> None:
     # Can't do anything if we don't know who sent this message.
     if message.from_user is None:
         return
@@ -175,7 +181,7 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
     if not message.text:
         return
 
-    is_admin = await database.is_user_admin_of_main_chat(bot, message.from_user.id)
+    is_admin = await database.is_user_admin_of_main_chat(bot, app, message.from_user.id)
 
     message_lower = message.text.lower()
 
@@ -229,7 +235,7 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
                     )
 
         elif message_lower.startswith('/list') or message_lower == '/list':
-            if await database.is_user_part_of_main_chat(bot, message.from_user.id):
+            if await database.is_user_part_of_main_chat(bot, app, message.from_user.id):
                 suggestions = db.get_current_suggestions()
                 message_text = 'Current suggested venues:\n\n'
                 message_text += util.get_list_suggestions_message_text(suggestions)
@@ -248,7 +254,7 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
             )
             try:
                 png, message_text = await util.get_map_suggestions_message_data(
-                    BARS, db.get_current_suggestions(bypass_cache=False),
+                    bars, db.get_current_suggestions(bypass_cache=False), app
                 )
             except Exception as err:
                 print(f'Map rendering failed: {err}')
@@ -278,7 +284,7 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
                 except:
                     pass
 
-        elif app.BARNIGHT_HASHTAG in message_lower:
+        elif BARNIGHT_HASHTAG in message_lower:
             await bot.send_message(
                 message.chat.id,
                 f'Please send venue suggestions in the main chatroom.',
@@ -286,13 +292,13 @@ async def handle_message(update: telegram.Update, message: telegram.Message):
             )
 
     elif message.chat.id == app.MAIN_CHAT_ID:
-        hashtag_index = message_lower.find(app.BARNIGHT_HASHTAG)
+        hashtag_index = message_lower.find(BARNIGHT_HASHTAG)
         if hashtag_index != -1:
             left_of_hashtag = message.text[0:hashtag_index].strip()
-            right_of_hashtag = message.text[hashtag_index+len(app.BARNIGHT_HASHTAG):].strip()
+            right_of_hashtag = message.text[hashtag_index+len(BARNIGHT_HASHTAG):].strip()
             if len(left_of_hashtag) > 0 and len(right_of_hashtag) > 0 \
                     or len(left_of_hashtag) == 0 and len(right_of_hashtag) == 0:
                 pass
             else:
                 suggestion_text = left_of_hashtag if len(left_of_hashtag) > len(right_of_hashtag) else right_of_hashtag
-                await add_suggestion(suggestion_text, message.from_user.id, message.from_user.username or 'unknown')
+                await add_suggestion(suggestion_text, message.from_user.id, message.from_user.username or 'unknown', message.id, db, bot, app, bars)

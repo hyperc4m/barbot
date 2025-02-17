@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, ANY, MagicMock
 import telegram
 
 from barbot import sequence
+from barbot.app import AppSettings
 from barbot.sequence import SequenceServices
 
 
@@ -23,6 +24,8 @@ class MockServices(object):
         scheduler = MagicMock()
         self.scheduler = scheduler
 
+        self.app_settings = AppSettings({})
+
     def configure_stop_poll(self, options: Sequence[telegram.PollOption]):
         self.bot.return_value.stop_poll.return_value = telegram.Poll(
             id='1',
@@ -36,7 +39,7 @@ class MockServices(object):
         )
 
     def make_services(self) -> SequenceServices:
-        return SequenceServices(self.db(), self.bot(), self.scheduler())
+        return SequenceServices(self.db(), self.bot(), self.scheduler(), self.app_settings)
 
 
 class TestChooseWinner(unittest.IsolatedAsyncioTestCase):

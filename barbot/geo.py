@@ -6,7 +6,8 @@ from selenium import webdriver
 import time
 from typing import List, Tuple, TypeAlias, Dict, cast
 
-from . import app, bars
+from . import bars
+from .app import AppSettings
 
 LatLon: TypeAlias = Tuple[float, float]
 
@@ -18,16 +19,16 @@ def _get_bounds(coordinates: List[LatLon], padding: float) -> Tuple[LatLon, LatL
     latmax = max([c[0] for c in coordinates]) + padding
     lonmin = min([c[1] for c in coordinates]) - padding
     lonmax = max([c[1] for c in coordinates]) + padding
-    return ((latmin, lonmin), (latmax, lonmax))
+    return (latmin, lonmin), (latmax, lonmax)
 
 
 def _get_center(coordinates: List[LatLon]) -> LatLon:
     lat = sum(c[0] for c in coordinates) / len(coordinates)
     lon = sum(c[1] for c in coordinates) / len(coordinates)
-    return (lat, lon)
+    return lat, lon
 
 
-def _render_html(html: str) -> bytes:
+def _render_html(html: str, app: AppSettings) -> bytes:
     html_base64 = base64.b64encode(html.encode("utf-8")).decode()
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
@@ -47,7 +48,7 @@ def _render_html(html: str) -> bytes:
 
 
 def _map_bars_to_png(
-    bars: List[bars.Bar], dimensions: Tuple[int, int]
+    bars: List[bars.Bar], dimensions: Tuple[int, int], app: AppSettings
 ) -> Tuple[Dict[str, bars.Bar], bytes]:
     if not bars:
         return {}, bytes()
@@ -66,14 +67,14 @@ def _map_bars_to_png(
         ).add_to(folium_map)
     folium.FitBounds(_get_bounds(coordinates, MAP_PADDING), padding=(2,2)).add_to(folium_map)
     html = folium_map.get_root().render()
-    return (letter_map, _render_html(cast(str, html)))
+    return letter_map, _render_html(cast(str, html), app)
 
 
 async def map_bars_to_png(
-    bars: List[bars.Bar], dimensions: Tuple[int, int]
+    bars: List[bars.Bar], dimensions: Tuple[int, int], app: AppSettings
 ) -> Tuple[Dict[str, bars.Bar], bytes]:
     # selenium doing some serious blocking work here, so we run it in another thread
     with concurrent.futures.ThreadPoolExecutor() as pool:
         return await asyncio.get_running_loop().run_in_executor(
-            pool, _map_bars_to_png, bars, dimensions
+            pool, _map_bars_to_png, bars, dimensions, app
         )

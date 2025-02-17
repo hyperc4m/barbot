@@ -9,7 +9,7 @@ from mypy_boto3_scheduler import EventBridgeSchedulerClient
 
 import boto3
 
-from . import app
+from barbot.app import AppSettings
 
 
 def make_scheduler() -> EventBridgeSchedulerClient:
@@ -19,7 +19,7 @@ def make_scheduler() -> EventBridgeSchedulerClient:
 cron_regex = re.compile(r'cron\(\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*\)')
 
 
-def get_schedule_time(scheduler: EventBridgeSchedulerClient, schedule_name: str) -> Optional[str]:
+def get_schedule_time(scheduler: EventBridgeSchedulerClient, app: AppSettings, schedule_name: str) -> Optional[str]:
     try:
         result = scheduler.get_schedule(
             GroupName=app.SCHEDULE_GROUP_NAME,

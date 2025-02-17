@@ -58,11 +58,26 @@ class TestChooseWinner(unittest.IsolatedAsyncioTestCase):
         mock_services = MockServices()
         mock_services.configure_stop_poll([
             telegram.PollOption('Foo', 5),
-            telegram.PollOption('Dingles!?.', 6),
+            telegram.PollOption('Din.gles', 6),
         ])
 
         result = await sequence.handle_choose_winner({}, mock_services.make_services())
-        expected_message = 'Calling it for *Dingles\\!?\\.*\\!'
+        expected_message = 'Calling it for *Din\\.gles*\\!'
         mock_services.bot.return_value.send_message.assert_called_with(
             chat_id=ANY, text=expected_message, parse_mode='MarkdownV2',
             disable_web_page_preview=ANY, reply_to_message_id=ANY)
+
+    async def test_bar_ending_with_punctuation(self):
+        punctuation_marks = ['.', '!', '?']
+        for punctuation_mark in punctuation_marks:
+            mock_services = MockServices()
+            mock_services.configure_stop_poll([
+                telegram.PollOption('Foo', 5),
+                telegram.PollOption(f'Dingles{punctuation_mark}', 6),
+            ])
+
+            result = await sequence.handle_choose_winner({}, mock_services.make_services())
+            expected_message = 'Calling it for *Dingles*\\!'
+            mock_services.bot.return_value.send_message.assert_called_with(
+                chat_id=ANY, text=expected_message, parse_mode='MarkdownV2',
+                disable_web_page_preview=ANY, reply_to_message_id=ANY)

@@ -161,7 +161,13 @@ async def handle_choose_winner(event: Dict[str, Any], services: SequenceServices
 
     chosen_option = random.choice(top_options)
 
-    text = f'*{util.escape_markdown_v2(chosen_option.text)}*'
+    bar_name = chosen_option.text
+
+    # Remove redundant punctuation
+    if bar_name.endswith(('.', '?', '!')):
+        bar_name = bar_name[:-1]
+
+    text = f'*{util.escape_markdown_v2(bar_name)}*'
     bar = bars.Bars(app.BAR_SPREADSHEET).match_bar(chosen_option.text)
     if bar:
         link = f'https://www.google.com/maps/dir/?api=1&destination={bar.latitude},{bar.longitude}'

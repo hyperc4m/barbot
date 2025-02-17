@@ -2,7 +2,7 @@
 
 ## Running the Bot Locally
 
-0. Ensure the `[aws](https://aws.amazon.com/cli/)` and `[sam](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)` CLI tools are install.
+0. Ensure the [aws](https://aws.amazon.com/cli/) and [sam](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) CLI tools are install.
 
 1. Create a file at the root of the repo named `env.json`.
 

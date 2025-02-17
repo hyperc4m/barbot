@@ -20,7 +20,7 @@ TEST_EVENTS = [
 ]
 TEST_APP_SETTINGS = AppSettings({
     'MAIN_EVENT_CRON': '0 19 ? * WED *',
-    'MAIN_EVENT_DURATION': 4
+    'MAIN_EVENT_DURATION': '4'
 })
 
 

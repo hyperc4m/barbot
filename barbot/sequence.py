@@ -179,27 +179,33 @@ async def handle_choose_winner(event: Dict[str, Any], services: SequenceServices
     if bar_name.endswith(('.', '?', '!')):
         bar_name = bar_name[:-1]
 
-    text = f'*{util.escape_markdown_v2(bar_name)}*'
+    bar_name_markdown = f'*{util.escape_markdown_v2(bar_name)}*'
     bar = bars.Bars(app_settings.BAR_SPREADSHEET).match_bar(chosen_option.text)
     if bar:
         link = f'https://www.google.com/maps/dir/?api=1&destination={bar.latitude},{bar.longitude}'
-        text = f'[{text}]({link})'
-    message = f'Calling it for {text}\\!'
-    if len(top_options) > 1:
-        message += util.escape_markdown_v2(f' (Chosen randomly out of the top {len(top_options)} options)')
+        bar_name_markdown = f'[{bar_name_markdown}]({link})'
+
+    message = ''
+    chat_id = app_settings.MAIN_CHAT_ID
+    if app_settings.PUBLIC_ANNOUNCEMENT_ID:
+        chat_id = app_settings.PUBLIC_ANNOUNCEMENT_ID
+        message = f'The next bar night will be held at {bar_name_markdown}\\.'
+    else:
+        message = f'Calling it for {bar_name_markdown}\\!'
+        if len(top_options) > 1:
+            message += util.escape_markdown_v2(f' (Chosen randomly out of the top {len(top_options)} options)')
 
     message_result = await bot.send_message(
-        chat_id=app_settings.MAIN_CHAT_ID,
+        chat_id=chat_id,
         text=message,
         parse_mode='MarkdownV2',
         disable_web_page_preview=True,
         reply_to_message_id=poll_id
     )
 
-    await bot.pin_chat_message(
-        chat_id=app_settings.MAIN_CHAT_ID,
-        message_id=message_result.id,
-    )
+    # Only pin if main chat
+    if chat_id == app_settings.MAIN_CHAT_ID:
+        await bot.pin_chat_message(chat_id=chat_id, message_id=message_result.id)
 
     db.set_current_poll_id(0)
     return {}

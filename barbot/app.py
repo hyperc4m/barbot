@@ -17,6 +17,9 @@ class AppSettings(object):
         self.BAR_SPREADSHEET = env.get('BAR_SPREADSHEET', '')
         self.SELENIUM_SERVER_URL = env.get('SELENIUM_SERVER_URL', 'http://localhost:4444')
 
+        # If set, bar decision announcements will be sent to this chat_id instead of MAIN_CHAT_ID.
+        self.PUBLIC_ANNOUNCEMENT_ID = env.get('PUBLIC_ANNOUNCEMENT_ID')
+
 
 BARNIGHT_HASHTAG = '#barnight'
 

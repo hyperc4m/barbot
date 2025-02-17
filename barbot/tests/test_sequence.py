@@ -84,3 +84,38 @@ class TestChooseWinner(unittest.IsolatedAsyncioTestCase):
             mock_services.bot.return_value.send_message.assert_called_with(
                 chat_id=ANY, text=expected_message, parse_mode='MarkdownV2',
                 disable_web_page_preview=ANY, reply_to_message_id=ANY)
+
+    async def test_result_sent_to_associated_channel(self):
+        mock_services = MockServices()
+        mock_services.configure_stop_poll([
+            telegram.PollOption('Foo', 5),
+            telegram.PollOption(f'Dingles', 6),
+        ])
+        mock_services.app_settings.MAIN_CHAT_ID = 12345
+        mock_services.app_settings.PUBLIC_ANNOUNCEMENT_ID = 67890
+
+        result = await sequence.handle_choose_winner({}, mock_services.make_services())
+
+        expected_message = 'The next bar night will be held at Dingles\\.'
+        mock_services.bot.return_value.send_message.assert_called_with(
+            chat_id=mock_services.app_settings.PUBLIC_ANNOUNCEMENT_ID, text=ANY, parse_mode=ANY,
+            disable_web_page_preview=ANY, reply_to_message_id=ANY)
+        mock_services.bot.return_value.pin_chat_message.assert_not_called()
+
+
+    async def test_result_sent_to_main_group_if_associated_channel_not_set(self):
+        mock_services = MockServices()
+        mock_services.configure_stop_poll([
+            telegram.PollOption('Foo', 5),
+            telegram.PollOption(f'Dingles', 6),
+        ])
+        mock_services.app_settings.MAIN_CHAT_ID = 12345
+
+        result = await sequence.handle_choose_winner({}, mock_services.make_services())
+
+        expected_message = 'Calling it for *Dingles*\\!'
+        mock_services.bot.return_value.send_message.assert_called_with(
+            chat_id=mock_services.app_settings.MAIN_CHAT_ID, text=expected_message, parse_mode=ANY,
+            disable_web_page_preview=ANY, reply_to_message_id=ANY)
+        mock_services.bot.return_value.pin_chat_message.assert_called_with(
+            chat_id=mock_services.app_settings.MAIN_CHAT_ID, message_id=ANY)

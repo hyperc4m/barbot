@@ -4,7 +4,7 @@ Lambda functions intended to be called from Step Functions go here
 import os
 import random
 import traceback
-from typing import Dict, Any, List, Callable, Awaitable
+from typing import Dict, Any, List, Callable, Awaitable, Optional
 
 import telegram
 from mypy_boto3_scheduler import EventBridgeSchedulerClient
@@ -41,9 +41,12 @@ def handle_function_call(event: Dict[str, Any], context: Dict[str, Any]) -> Dict
 async def handle_ask_for_suggestions(event: Dict[str, Any], services: SequenceServices) -> Dict[str, Any]:
     app_settings = services.app
 
-    if schedule_util.is_fourth_weds_this_week():
-        text = 'El Rio this week! No voting :з'
-        await services.bot.send_message(chat_id=services.app.MAIN_CHAT_ID, text=text)
+    scheduled_event = schedule_util.get_active_scheduled_event(services.db, app_settings)
+    if scheduled_event:
+        # This cycle is a scheduled event!
+        def get_message(bar_name_markdown: str) -> str:
+            return f'Next bar night will be at {bar_name_markdown}\\!'
+        await send_winning_result(scheduled_event.venue_name, services, get_message, reply_to_message_id=None)
         return {}
 
     text = f'It\'s time for bar night suggestions! Message @{app_settings.BOT_USERNAME} or end a message with ' \
@@ -61,9 +64,8 @@ async def handle_create_poll(event: Dict[str, Any], services: SequenceServices) 
     bot = services.bot
     app_settings = services.app
 
-    if schedule_util.is_fourth_weds_this_week():
-        text = 'El Rio this week! No voting :з'
-        await bot.send_message(chat_id=app_settings.MAIN_CHAT_ID, text=text)
+    if schedule_util.get_active_scheduled_event(db, app_settings):
+        # Skip due to scheduled event
         return {}
 
     db.set_current_poll_id(0)
@@ -128,9 +130,8 @@ async def handle_create_poll(event: Dict[str, Any], services: SequenceServices) 
 async def handle_poll_reminder(event: Dict[str, Any], services: SequenceServices) -> Dict[str, Any]:
     app_settings = services.app
 
-    if schedule_util.is_fourth_weds_this_week():
-        text = 'El Rio this week! No voting :з'
-        await services.bot.send_message(chat_id=app_settings.MAIN_CHAT_ID, text=text)
+    if schedule_util.get_active_scheduled_event(services.db, app_settings):
+        # Skipped when scheduled event is active
         return {}
 
     poll_id = services.db.get_current_poll_id()
@@ -155,9 +156,7 @@ async def handle_choose_winner(event: Dict[str, Any], services: SequenceServices
     bot = services.bot
     app_settings = services.app
 
-    if schedule_util.is_fourth_weds_this_week():
-        text = 'El Rio this week! No voting :з'
-        await bot.send_message(chat_id=app_settings.MAIN_CHAT_ID, text=text)
+    if schedule_util.get_active_scheduled_event(db, app_settings):
         return {}
 
     poll_id = db.get_current_poll_id()
@@ -196,40 +195,57 @@ async def handle_choose_winner(event: Dict[str, Any], services: SequenceServices
 
     bar_name = chosen_option.text
 
-    # Remove redundant punctuation
-    if bar_name.endswith(('.', '?', '!')):
-        bar_name = bar_name[:-1]
+    def get_main_chat_message(bar_name_markdown: str) -> str:
+        message = f'Calling it for {bar_name_markdown}\\!'
+        if len(top_options) > 1:
+            message += util.escape_markdown_v2(f' (Chosen randomly out of the top {len(top_options)} options)')
+        return message
 
-    bar_name_markdown = f'*{util.escape_markdown_v2(bar_name)}*'
-    bar = bars.Bars(app_settings.BAR_SPREADSHEET).match_bar(chosen_option.text)
+    await send_winning_result(bar_name, services, get_main_chat_message, poll_id)
+
+    db.set_current_poll_id(0)
+    return {}
+
+
+async def send_winning_result(
+    bar_name: str,
+    services: SequenceServices,
+    main_chat_message_func: Callable[[str], str],
+    reply_to_message_id: Optional[int],
+) -> None:
+    app_settings = services.app
+    bot = services.bot
+
+    # Remove redundant punctuation
+    bar_name_no_punctuation = bar_name
+    if bar_name.endswith(('.', '?', '!')):
+        bar_name_no_punctuation = bar_name[:-1]
+
+    bar_name_markdown = f'*{util.escape_markdown_v2(bar_name_no_punctuation)}*'
+    bar = bars.Bars(services.app.BAR_SPREADSHEET).match_bar(bar_name)
     if bar:
         link = f'https://www.google.com/maps/dir/?api=1&destination={bar.latitude},{bar.longitude}'
         bar_name_markdown = f'[{bar_name_markdown}]({link})'
 
-    message = ''
     chat_id = app_settings.MAIN_CHAT_ID
     if app_settings.ANNOUNCEMENT_CHAT_ID:
         chat_id = app_settings.ANNOUNCEMENT_CHAT_ID
         message = f'The next bar night will be held at {bar_name_markdown}\\.'
     else:
-        message = f'Calling it for {bar_name_markdown}\\!'
-        if len(top_options) > 1:
-            message += util.escape_markdown_v2(f' (Chosen randomly out of the top {len(top_options)} options)')
+        message = main_chat_message_func(bar_name_markdown)
 
     message_result = await bot.send_message(
         chat_id=chat_id,
         text=message,
         parse_mode='MarkdownV2',
         disable_web_page_preview=True,
-        reply_to_message_id=poll_id
+        reply_to_message_id=reply_to_message_id
     )
 
     # Only pin if main chat
     if chat_id == app_settings.MAIN_CHAT_ID:
         await bot.pin_chat_message(chat_id=chat_id, message_id=message_result.id)
 
-    db.set_current_poll_id(0)
-    return {}
 
 
 EVENT_TYPE_ASK_FOR_SUGGESTIONS = 'AskForSuggestions'

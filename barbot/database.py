@@ -18,12 +18,24 @@ class Suggestion(object):
         self.user_handle = user_handle
 
 
+class ScheduledVenue(object):
+    def __init__(self, hex_uuid: str, venue_name: str, cron: str, duration_hours: int):
+        self.uuid = hex_uuid
+        self.venue_name = venue_name
+        self.cron = cron
+        self.duration_hours = duration_hours
+
+
 last_suggestions_update_time = datetime.datetime(day=1, month=1, year=1)
 cached_suggestions: List[Suggestion] = []
 
 def make_suggestion(k: str, v: Dict[str, Any]) -> Suggestion:
     m = v['M']
     return Suggestion(k, m['name']['S'], int(m['user_id']['N']), m['user_handle']['S'])
+
+def make_scheduled_venue(k: str, v: Dict[str, Any]) -> ScheduledVenue:
+    m = v['M']
+    return ScheduledVenue(k, m['venue_name']['S'], m['cron']['S'], m['duration_hours']['N'])
 
 
 class Database(abc.ABC):
@@ -53,6 +65,18 @@ class Database(abc.ABC):
 
     @abc.abstractmethod
     def remove_suggestion(self, hex_uuid: str):
+        pass
+
+    @abc.abstractmethod
+    def add_scheduled_venue(self, hex_uuid: str, venue_name: str, cron: str, duration_hours: int) -> None:
+        pass
+
+    @abc.abstractmethod
+    def remove_scheduled_venue(self, hex_uuid: str) -> None:
+        pass
+
+    @abc.abstractmethod
+    def get_scheduled_venues(self) -> List[ScheduledVenue]:
         pass
 
 
@@ -165,6 +189,46 @@ class DynamoDatabase(Database):
         # Invalidate the cache
         global last_suggestions_update_time
         last_suggestions_update_time = datetime.datetime(day=1, month=1, year=1)
+
+    def add_scheduled_venue(self, hex_uuid: str, venue_name: str, cron: str, duration_hours: int) -> None:
+        self.dynamodb.update_item(
+            TableName=self.app.DYNAMO_EVENTS_TABLE_NAME,
+            Key={'id': {'S': 'current'}},
+            UpdateExpression='SET events.#uuid = :value',
+            ExpressionAttributeNames={
+                '#uuid': hex_uuid
+            },
+            ExpressionAttributeValues={
+                ':value': {'M': {
+                    'venue_name': {'S': venue_name},
+                    'cron': {'S': cron},
+                    'duration_hours': {'N': str(duration_hours)}
+                }}
+            }
+        )
+
+    def remove_scheduled_venue(self, hex_uuid: str) -> None:
+        self.dynamodb.update_item(
+            TableName=self.app.DYNAMO_EVENTS_TABLE_NAME,
+            Key={'id': {'S': 'current'}},
+            UpdateExpression='REMOVE events.#uuid',
+            ExpressionAttributeNames={
+                '#uuid': hex_uuid
+            }
+        )
+
+    def get_scheduled_venues(self) -> List[ScheduledVenue]:
+        get_result = self.dynamodb.get_item(
+            TableName=self.app.DYNAMO_EVENTS_TABLE_NAME,
+            Key={'id': {'S': 'current'}}
+        )
+        item = get_result.get('Item')
+        if not item:
+            return []
+
+        events_map = item['events']['M']
+        scheduled_venues = [make_scheduled_venue(k, v) for k, v in events_map.items()]
+        return scheduled_venues
 
 
 cached_membership: Dict[int, Tuple[str, datetime.datetime]] = {}

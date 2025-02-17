@@ -9,6 +9,7 @@ class AppSettings(object):
         self.WEBHOOK_SECRET = env.get('TELEGRAM_BOT_API_SECRET_TOKEN')
         self.DYNAMODB_ENDPOINT_URL = env.get('DYNAMODB_ENDPOINT_URL')
         self.DYNAMO_WEEK_TABLE_NAME = env.get('DYNAMO_WEEK_TABLE_NAME')
+        self.DYNAMO_EVENTS_TABLE_NAME = env.get('DYNAMO_EVENTS_TABLE_NAME')
         self.BOT_USERNAME = env.get('BOT_USERNAME')
         self.WEBHOOK_URL = env.get('WEBHOOK_URL')
         self.SCHEDULE_GROUP_NAME = env.get('SCHEDULE_GROUP_NAME', '')
@@ -19,6 +20,11 @@ class AppSettings(object):
 
         # If set, bar decision announcements will be sent to this chat_id instead of MAIN_CHAT_ID.
         self.ANNOUNCEMENT_CHAT_ID = int(env.get('ANNOUNCEMENT_CHAT_ID', '0'))
+
+        # The cron expression representing the cadence that the main event (bar night) starts
+        self.MAIN_EVENT_TIMEZONE = env.get('MAIN_EVENT_TIMEZONE', 'Etc/UTC')
+        self.MAIN_EVENT_CRON = env.get('MAIN_EVENT_CRON', '')
+        self.MAIN_EVENT_DURATION_HOURS = int(env.get('MAIN_EVENT_DURATION_HOURS', '4'))
 
 
 BARNIGHT_HASHTAG = '#barnight'

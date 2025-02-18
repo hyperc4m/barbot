@@ -284,6 +284,57 @@ async def handle_message(update: telegram.Update, message: telegram.Message, db:
                 except:
                     pass
 
+        elif message_lower.startswith('/newevent'):
+            json_body = message.text[len('/newevent '):].strip()
+            if not is_admin:
+                await bot.send_message(message.chat.id, 'You must be an admin to use this command.')
+            elif not json_body:
+                message_text = \
+                    'Usage: /newevent \\<json\\>\n\n' \
+                    'The message should look something like this:\n' \
+                    '```\n' \
+                    '/newevent {\n' \
+                    '    "venue_name": "NAME",\n' \
+                    '    "cron": "0 19 ? * WED#4 *",\n' \
+                    '    "duration_minutes": 240\n' \
+                    '}\n' \
+                    '```'
+                await bot.send_message(message.chat.id, message_text, parse_mode='MarkdownV2')
+            else:
+                try:
+                    data = json.loads(json_body)
+                    event_uuid = uuid.uuid4().hex
+                    db.add_scheduled_venue(event_uuid, str(data['venue_name']), str(data['cron']), int(data['duration_minutes']))
+                except:
+                    traceback.print_exc()
+                    await bot.send_message(message.chat.id, 'Sorry, I had trouble parsing that json.')
+                    return
+
+            await bot.send_message(message.chat.id, 'Event created!')
+
+        elif message_lower.startswith('/delevent'):
+            event_name = message.text[len('/delevent '):].strip()
+            if not is_admin:
+                await bot.send_message(message.chat.id, 'You must be an admin to use this command.')
+            elif not event_name:
+                await bot.send_message(message.chat.id, 'Usage: /newevent <scheduled event name>')
+            else:
+                events = db.get_scheduled_venues()
+                event = next((e for e in events if e.venue_name.lower() == event_name.lower()), None)
+
+                if event:
+                    try:
+                        db.remove_scheduled_venue(event.uuid)
+                    except:
+                        traceback.print_exc()
+                        await bot.send_message(message.chat.id,f'Sorry, I had trouble deleting the scheduled event.')
+                        return
+
+                    await bot.send_message(message.chat.id, f'Deleted scheduled event "{event_name}".')
+
+                else:
+                    await bot.send_message(message.chat.id,f'Could not find scheduled event "{event_name}" to remove.')
+
         elif BARNIGHT_HASHTAG in message_lower:
             await bot.send_message(
                 message.chat.id,

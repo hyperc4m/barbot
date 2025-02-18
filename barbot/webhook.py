@@ -310,7 +310,7 @@ async def handle_message(update: telegram.Update, message: telegram.Message, db:
                     await bot.send_message(message.chat.id, 'Sorry, I had trouble parsing that json.')
                     return
 
-            await bot.send_message(message.chat.id, 'Event created!')
+                await bot.send_message(message.chat.id, 'Event created!')
 
         elif message_lower.startswith('/delevent'):
             event_name = message.text[len('/delevent '):].strip()

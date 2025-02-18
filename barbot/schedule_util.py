@@ -79,14 +79,14 @@ def get_active_scheduled_event_inner(events: List[ScheduledVenue], app: AppSetti
     if next_main_event is None:
         return None
 
-    main_event_end = next_main_event + datetime.timedelta(hours=app.MAIN_EVENT_DURATION_HOURS)
+    main_event_end = next_main_event + datetime.timedelta(minutes=app.MAIN_EVENT_DURATION_MINUTES)
 
     for event in events:
         next_scheduled_event = get_next_cron(f'cron({event.cron})', now)
         if next_scheduled_event is None:
             continue
 
-        next_scheduled_event_end = next_scheduled_event + datetime.timedelta(hours=event.duration_hours)
+        next_scheduled_event_end = next_scheduled_event + datetime.timedelta(minutes=event.duration_minutes)
 
         # Does this event overlap with the main event?
         if main_event_end > next_scheduled_event and next_main_event < next_scheduled_event_end:

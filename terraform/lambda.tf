@@ -41,7 +41,8 @@ data "aws_iam_policy_document" "lambda" {
       "dynamodb:DescribeTable"
     ]
     resources = [
-      aws_dynamodb_table.barnight_week.arn
+      aws_dynamodb_table.barnight_week.arn,
+      aws_dynamodb_table.barnight_events.arn
     ]
   }
   statement {
@@ -105,12 +106,16 @@ resource "aws_lambda_function" "api" {
       TELEGRAM_BOT_API_SECRET_TOKEN: random_password.webhook_secret.result
       BOT_USERNAME: var.bot_username,
       DYNAMO_WEEK_TABLE_NAME: aws_dynamodb_table.barnight_week.name
+      DYNAMO_EVENTS_TABLE_NAME: aws_dynamodb_table.barnight_events.name
       SCHEDULE_GROUP_NAME: aws_scheduler_schedule_group.barbot.name
       CREATE_POLL_SCHEDULE_NAME = "${var.prefix}_create_poll"
       CLOSE_POLL_SCHEDULE_NAME = "${var.prefix}_close_poll"
       BAR_SPREADSHEET: var.bar_spreadsheet,
       SELENIUM_SERVER_URL: var.selenium_server_url,
-      ANNOUNCEMENT_CHAT_ID: var.announcement_chat_id
+      ANNOUNCEMENT_CHAT_ID: var.announcement_chat_id,
+      MAIN_EVENT_TIMEZONE: var.timezone,
+      MAIN_EVENT_CRON: var.main_event_cron,
+      MAIN_EVENT_DURATION_MINUTES: tostring(var.main_event_duration_minutes)
     }
   }
 

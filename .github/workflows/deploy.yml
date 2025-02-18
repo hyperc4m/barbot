@@ -66,3 +66,4 @@ jobs:
         -var main_chat_id="${{ secrets.MAIN_CHAT_ID }}"
         -var bar_spreadsheet="${{ secrets.BAR_SPREADSHEET }}"
         -var selenium_server_url="${{ secrets.SELENIUM_SERVER_URL }}"
+        -var announcement_chat_id="${{ secrets.ANNOUNCEMENT_CHAT_ID }}"

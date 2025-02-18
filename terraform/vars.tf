@@ -67,3 +67,13 @@ variable "close_poll_cron" {
   description = "Cron expression for when the poll should be closed. (Amazon EventBridge Scheduler syntax)"
   type        = string
 }
+
+variable "main_event_cron" {
+  description = "Cron expression for when the main event starts. (Amazon EventBridge Scheduler syntax)"
+  type        = string
+}
+
+variable "main_event_duration_minutes" {
+  description = "How long the main event takes place for (in minutes)"
+  type        = number
+}

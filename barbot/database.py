@@ -19,11 +19,11 @@ class Suggestion(object):
 
 
 class ScheduledVenue(object):
-    def __init__(self, hex_uuid: str, venue_name: str, cron: str, duration_hours: int):
+    def __init__(self, hex_uuid: str, venue_name: str, cron: str, duration_minutes: int):
         self.uuid = hex_uuid
         self.venue_name = venue_name
         self.cron = cron
-        self.duration_hours = duration_hours
+        self.duration_minutes = duration_minutes
 
 
 last_suggestions_update_time = datetime.datetime(day=1, month=1, year=1)
@@ -35,7 +35,7 @@ def make_suggestion(k: str, v: Dict[str, Any]) -> Suggestion:
 
 def make_scheduled_venue(k: str, v: Dict[str, Any]) -> ScheduledVenue:
     m = v['M']
-    return ScheduledVenue(k, m['venue_name']['S'], m['cron']['S'], m['duration_hours']['N'])
+    return ScheduledVenue(k, m['venue_name']['S'], m['cron']['S'], int(m['duration_minutes']['N']))
 
 
 class Database(abc.ABC):
@@ -68,7 +68,7 @@ class Database(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def add_scheduled_venue(self, hex_uuid: str, venue_name: str, cron: str, duration_hours: int) -> None:
+    def add_scheduled_venue(self, hex_uuid: str, venue_name: str, cron: str, duration_minutes: int) -> None:
         pass
 
     @abc.abstractmethod
@@ -190,7 +190,7 @@ class DynamoDatabase(Database):
         global last_suggestions_update_time
         last_suggestions_update_time = datetime.datetime(day=1, month=1, year=1)
 
-    def add_scheduled_venue(self, hex_uuid: str, venue_name: str, cron: str, duration_hours: int) -> None:
+    def add_scheduled_venue(self, hex_uuid: str, venue_name: str, cron: str, duration_minutes: int) -> None:
         self.dynamodb.update_item(
             TableName=self.app.DYNAMO_EVENTS_TABLE_NAME,
             Key={'id': {'S': 'current'}},
@@ -202,7 +202,7 @@ class DynamoDatabase(Database):
                 ':value': {'M': {
                     'venue_name': {'S': venue_name},
                     'cron': {'S': cron},
-                    'duration_hours': {'N': str(duration_hours)}
+                    'duration_minutes': {'N': str(duration_minutes)}
                 }}
             }
         )

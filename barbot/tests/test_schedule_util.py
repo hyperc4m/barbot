@@ -16,7 +16,7 @@ from barbot.database import ScheduledVenue
 # 30 31
 
 TEST_EVENTS = [
-    ScheduledVenue('', 'foo', '0 19 ? * WED#4 *', duration_hours=4)
+    ScheduledVenue('', 'foo', '0 19 ? * WED#4 *', duration_minutes=60 * 4)
 ]
 TEST_APP_SETTINGS = AppSettings({
     'MAIN_EVENT_CRON': '0 19 ? * WED *',

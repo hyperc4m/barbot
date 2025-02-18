@@ -142,6 +142,41 @@ class TestCreatePoll(unittest.IsolatedAsyncioTestCase):
         mock_services.bot.return_value.send_poll.assert_not_called()
         mock_services.bot.return_value.pin_chat_message.assert_not_called()
 
+    async def test_result_announced_if_only_one_suggestion(self, mock_get_now):
+        mock_services = MockServices()
+        mock_services.db.return_value.get_current_suggestions.return_value = [
+            Suggestion('', 'Foo', 0, '')
+        ]
+
+        result = await sequence.handle_create_poll({}, mock_services.make_services())
+
+        mock_services.bot.return_value.send_message.assert_called_with(
+            chat_id=mock_services.app_settings.MAIN_CHAT_ID,
+            text='There was only one suggestion, and it was for *Foo*\\.',
+            parse_mode='MarkdownV2', disable_web_page_preview=ANY, reply_to_message_id=None
+        )
+        mock_services.bot.return_value.send_poll.assert_not_called()
+        mock_services.bot.return_value.pin_chat_message.assert_called_with(
+            chat_id=mock_services.app_settings.MAIN_CHAT_ID, message_id=ANY)
+
+    async def test_single_suggestion_sends_to_announce_channel(self, mock_get_now):
+        mock_services = MockServices()
+        mock_services.db.return_value.get_current_suggestions.return_value = [
+            Suggestion('', 'Foo', 0, '')
+        ]
+        mock_services.app_settings.ANNOUNCEMENT_CHAT_ID = 1234
+
+        result = await sequence.handle_create_poll({}, mock_services.make_services())
+
+        mock_services.bot.return_value.send_message.assert_called_with(
+            chat_id=mock_services.app_settings.ANNOUNCEMENT_CHAT_ID,
+            text='The next bar night will be held at *Foo*\\.',
+            parse_mode='MarkdownV2', disable_web_page_preview=ANY, reply_to_message_id=None
+        )
+        mock_services.bot.return_value.send_poll.assert_not_called()
+        # Telegram auto-pins channel messages to the discussion channel.
+        mock_services.bot.return_value.pin_chat_message.assert_not_called()
+
 
 @patch('barbot.schedule_util.get_now')
 class TestPollReminder(unittest.IsolatedAsyncioTestCase):
@@ -230,6 +265,7 @@ class TestChooseWinner(unittest.IsolatedAsyncioTestCase):
         mock_services.bot.return_value.send_message.assert_called_with(
             chat_id=mock_services.app_settings.ANNOUNCEMENT_CHAT_ID, text=ANY, parse_mode=ANY,
             disable_web_page_preview=ANY, reply_to_message_id=ANY)
+        # We don't need to pin, since posting to the announcement channel auto-pins to the discussion channel.
         mock_services.bot.return_value.pin_chat_message.assert_not_called()
 
 

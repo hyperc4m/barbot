@@ -77,11 +77,9 @@ async def handle_create_poll(event: Dict[str, Any], services: SequenceServices) 
             text='Oops! No one suggested anything for barnight. I\'m gonna sit this one out...',
         )
     elif len(suggestions) == 1:
-        send_message_result = await bot.send_message(
-            chat_id=app_settings.MAIN_CHAT_ID,
-            text=f'There was only one suggestion, and it was for {suggestions[0].venue}.'
-        )
-        await bot.pin_chat_message(chat_id=app_settings.MAIN_CHAT_ID, message_id=send_message_result.id)
+        def get_main_chat_message(bar_name_markdown: str) -> str:
+            return f'There was only one suggestion, and it was for {bar_name_markdown}\\.'
+        await send_winning_result(suggestions[0].venue, services, get_main_chat_message, reply_to_message_id=None)
     else:
         try:
             png, png_text = await util.get_map_suggestions_message_data(bars.Bars(app_settings.BAR_SPREADSHEET), suggestions, app_settings)
@@ -121,8 +119,6 @@ async def handle_create_poll(event: Dict[str, Any], services: SequenceServices) 
         db.set_current_poll_id(poll_id)
         await bot.pin_chat_message(chat_id=app_settings.MAIN_CHAT_ID, message_id=poll_id)
 
-    # TODO: if `bot.pin_chat_message` fails, this will never be called,
-    # which means we'll re-use the suggestions next round
     db.clear_suggestions()
     return {}
 

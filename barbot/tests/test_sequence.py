@@ -329,3 +329,29 @@ class TestChooseWinner(unittest.IsolatedAsyncioTestCase):
             disable_web_page_preview=ANY, reply_to_message_id=ANY)
         mock_services.bot.return_value.pin_chat_message.assert_called_with(
             chat_id=mock_services.app_settings.MAIN_CHAT_ID, message_id=ANY)
+
+
+class TestSendWinningResult(unittest.IsolatedAsyncioTestCase):
+    async def test_with_reply_id(self):
+        mock_services = MockServices()
+
+        await sequence.send_winning_result('Dingles', mock_services.make_services(), lambda x: f'Its {x}', 1234)
+
+        expected_message = 'Its *Dingles*'
+        mock_services.bot.return_value.send_message.assert_called_with(
+            chat_id=mock_services.app_settings.MAIN_CHAT_ID, text=expected_message, parse_mode=ANY,
+            disable_web_page_preview=ANY, reply_to_message_id=1234)
+        mock_services.bot.return_value.pin_chat_message.assert_called_with(
+            chat_id=mock_services.app_settings.MAIN_CHAT_ID, message_id=ANY)
+
+    async def test_reply_id_not_used_if_posting_to_announcments_chat(self):
+        mock_services = MockServices()
+        mock_services.app_settings.ANNOUNCEMENT_CHAT_ID = 12345
+
+        await sequence.send_winning_result('Dingles', mock_services.make_services(), lambda x: f'Its {x}', 1234)
+
+        expected_message = 'The next bar night will be held at *Dingles*\\.'
+        mock_services.bot.return_value.send_message.assert_called_with(
+            chat_id=mock_services.app_settings.ANNOUNCEMENT_CHAT_ID, text=expected_message, parse_mode=ANY,
+            disable_web_page_preview=ANY, reply_to_message_id=None)
+        mock_services.bot.return_value.pin_chat_message.assert_not_called()

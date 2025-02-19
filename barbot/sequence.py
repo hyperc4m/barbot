@@ -235,7 +235,7 @@ async def send_winning_result(
         text=message,
         parse_mode='MarkdownV2',
         disable_web_page_preview=True,
-        reply_to_message_id=reply_to_message_id
+        reply_to_message_id=reply_to_message_id if chat_id == app_settings.MAIN_CHAT_ID else None
     )
 
     # Only pin if main chat
